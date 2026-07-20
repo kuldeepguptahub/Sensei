@@ -1,0 +1,3 @@
+endpoint_url = "https://endpointurl.com/v1/"
+api_key = "sk_adfhasdfjsadfjkuiasd5643ajdfg"
+model_name = "openai/gpt4"

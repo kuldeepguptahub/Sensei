@@ -18,8 +18,16 @@ def help():
 @app.command()
 def setup():
     """
-    Initializes the setup from scratch."""
-    typer.echo("Not yet implemented")
+    Initializes the setup from scratch.
+    """
+    typer.echo("Enter the provider and model details for setup:")
+    endpoint_url = typer.prompt("Endpoint URL: ")
+    api_key = typer.prompt("API Key: ")
+    model_name = typer.prompt("Model Name: ")
+
+    from sensei.gateway.config import save_config
+    save_config(endpoint_url, api_key, model_name)
+
 
 @app.command()
 def list():

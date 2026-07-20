@@ -8,6 +8,7 @@ authors = [
 ]
 requires-python = ">=3.13"
 dependencies = [
+    "tomli-w>=1.2.0",
     "typer>=0.27.0",
 ]
 
