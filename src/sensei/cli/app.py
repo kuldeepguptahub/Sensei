@@ -34,7 +34,16 @@ def list():
     """
     Lists all the available courses and their status.
     """
-    typer.echo("Not yet implemented")
+    from sensei.persistence.database import list_courses, initialize_database
+    initialize_database()
+    courses = list_courses()
+    if not courses:
+        typer.echo("No courses found.")
+    else:
+        typer.echo("Available courses:")
+        for courses in courses:
+            typer.echo(f"ID: {courses[0]}, Name: {courses[1]}, Status: {courses[2]}, Created At: {courses[3]}, Last Accessed at: {courses[4]}")
+            
     
 
 @app.command()
