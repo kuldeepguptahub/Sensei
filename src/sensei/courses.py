@@ -9,25 +9,23 @@ This module contains workflow functions for course operations including:
 Workflows coordinate database operations and validate inputs.
 """
 
-from typing import Optional
+from typing import Optional, Dict, Any, List
 from sensei.persistence.database import insert_course, get_course, update_course, delete_course
 from datetime import datetime
 
 
-def create_new_course(name: str) -> int:
+def list_courses() -> List[tuple]:
     """
-    Create a new course with the given name.
-
-    Args:
-        name: The name of the course to create
+    List all courses in the database.
 
     Returns:
-        The ID of the newly created course
-
-    Raises:
-        ValueError: If the course name is empty or already exists
+        A list of course tuples (id, name, status, created_at, last_accessed)
     """
-    # Validate input
+    from sensei.persistence.database import list_courses as db_list_courses
+    return db_list_courses()
+
+
+def create_new_course(name: str) -> int:
     if not name or not name.strip():
         raise ValueError("Course name cannot be empty")
 
@@ -83,6 +81,26 @@ def resume_course(course_id: Optional[int] = None, course_name: Optional[str] = 
         'created_at': course['created_at'],
         'last_accessed': datetime.now().isoformat()
     }
+
+
+def get_most_recent_course() -> Optional[dict]:
+    """
+    Get the most recently accessed course.
+
+    Returns:
+        A dictionary containing course information, or None if no courses exist
+    """
+    from sensei.persistence.database import get_connection
+
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT id FROM courses ORDER BY last_accessed DESC LIMIT 1')
+    recent_course = cursor.fetchone()
+
+    if recent_course:
+        return get_course(course_id=recent_course[0])
+
+    return None
 
 
 def complete_course(course_id: int) -> dict:

@@ -35,15 +35,15 @@ def list():
     """
     Lists all the available courses and their status.
     """
-    from sensei.persistence.database import list_courses, initialize_database
-    initialize_database()
+    from sensei.courses import list_courses
+
     courses = list_courses()
     if not courses:
         typer.echo("No courses found.")
     else:
         typer.echo("Available courses:")
         for course in courses:
-            typer.echo(f"ID: {course[0]}, Name: {course[1]}, Status: {course[2]}, Created At: {course[3]}, Last Accessed at: {course[4]}")
+            typer.echo(f"ID: {course[0]}, Name: {course[1]}, Status: {course[2]}")
 
 
 @app.command()
@@ -77,35 +77,45 @@ def start_new_course():
         typer.echo(f"Error: {e}")
 
 @app.command()
-def resume(course_name: str = typer.Argument(None, help="Name of the course to resume. Use list command to see available courses. If not specified, resumes the last course from recent checkpoint."),
+def resume(course_name: str = typer.Argument(None, help="Name of the course to resume. Use list command to see available courses."),
            course_id: int = typer.Option(None, "--id", help="ID of the course to resume")):
     """
     Resumes the specified course from recent checkpoint.
     """
-    from sensei.courses import resume_course
+    from sensei.courses import resume_course, list_courses
 
     try:
         if course_id:
+            # Resume by ID if provided
             course_info = resume_course(course_id=course_id)
+            typer.echo(f"Resumed course: {course_info['name']}")
         elif course_name:
+            # Resume by name if provided
             course_info = resume_course(course_name=course_name)
+            typer.echo(f"Resumed course: {course_info['name']}")
         else:
-            # Resume the most recently accessed course
-            from sensei.persistence.database import get_connection
-            conn = get_connection()
-            cursor = conn.cursor()
-            cursor.execute('SELECT id, name FROM courses ORDER BY last_accessed DESC LIMIT 1')
-            recent_course = cursor.fetchone()
-
-            if recent_course:
-                course_info = resume_course(course_id=recent_course[0])
-            else:
+            # Interactive mode: list courses and ask user to select one
+            courses = list_courses()
+            if not courses:
                 typer.echo("No courses found to resume.")
                 return
 
-        typer.echo(f"Resumed course: {course_info['name']} (ID: {course_info['id']})")
+            typer.echo("Available courses:")
+            for course in courses:
+                typer.echo(f"ID: {course[0]}, Name: {course[1]}, Status: {course[2]}")
+
+            selected_id = typer.prompt("Enter the ID of the course to resume")
+            try:
+                selected_id = int(selected_id)
+                course_info = resume_course(course_id=selected_id)
+                typer.echo(f"Resumed course: {course_info['name']}")
+            except ValueError:
+                typer.echo("Invalid ID. Please enter a numeric course ID.")
+            except Exception as e:
+                typer.echo(f"{e}")
+
     except ValueError as e:
-        typer.echo(f"Error: {e}")
+        typer.echo(f"{e}")
     
     
 if __name__ == "__main__":
