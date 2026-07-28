@@ -1,3 +1,4 @@
-endpoint_url = "sdfsdf.com"
-api_key = "ajhsadfsd-ashdfhsdf"
-model_name = "kimi"
+[default]
+endpoint_url = 'https://api.example.com/v1/chat/completions'
+api_key = 'test_api_key'
+model_name = 'test-model'

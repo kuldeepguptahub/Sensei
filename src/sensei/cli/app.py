@@ -13,7 +13,7 @@ def help():
     typer.echo("list - Lists all available courses and their status.")
     typer.echo("start-new-course - Starts a new course.")
     typer.echo("resume - Resumes a course from recent checkpoint.")
-    typer.echo("complete-course - Marks a course as completed.")
+    typer.echo("gateway-test - Test the gateway connection")
     
 
 @app.command()
