@@ -37,8 +37,12 @@ def create_new_course(name: str) -> int:
     if existing_course:
         raise ValueError(f"Course '{name}' already exists")
 
-    # Create new course
+    # Create new course in database
     course_id = insert_course(name)
+
+    # Create course state directory and files
+    from sensei.state import create_course_state
+    create_course_state(name)
 
     return course_id
 
