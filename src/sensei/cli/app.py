@@ -66,14 +66,35 @@ def start_new_course():
     """
     Starts a new course.
     """
-    from sensei.courses import create_new_course
+    from sensei.runtime import run_new_course, RuntimeEvent
 
     course_name = typer.prompt("Enter the name of the new course")
 
+    def event_callback(event: RuntimeEvent, data: Optional[str] = None):
+        if event == RuntimeEvent.COURSE_CREATING:
+            typer.echo("Creating course...")
+        elif event == RuntimeEvent.COURSE_CREATED:
+            typer.echo("✓ Course created")
+        elif event == RuntimeEvent.COURSE_LOADING:
+            typer.echo("Loading course...")
+        elif event == RuntimeEvent.COURSE_LOADED:
+            typer.echo("✓ Course loaded")
+        elif event == RuntimeEvent.THINKING:
+            typer.echo("Thinking...")
+        elif event == RuntimeEvent.RETRYING:
+            typer.echo(f"  {data}")
+        elif event == RuntimeEvent.SESSION_COMPLETE:
+            typer.echo("✓ Session complete")
+        elif event == RuntimeEvent.ERROR:
+            typer.echo(f"✗ Error: {data}")
+
     try:
-        course_id = create_new_course(course_name)
-        typer.echo(f"Course '{course_name}' created successfully with ID: {course_id}")
-    except ValueError as e:
+        response = run_new_course(course_name, callback=event_callback)
+        typer.echo("\nResponse:")
+        typer.echo("-" * 50)
+        typer.echo(response)
+        typer.echo("-" * 50)
+    except Exception as e:
         typer.echo(f"Error: {e}")
 
 @app.command()
@@ -82,19 +103,36 @@ def resume(course_name: str = typer.Argument(None, help="Name of the course to r
     """
     Resumes the specified course from recent checkpoint.
     """
-    from sensei.courses import resume_course, list_courses
+    from sensei.runtime import run_resume_course, RuntimeEvent
+
+    def event_callback(event: RuntimeEvent, data: Optional[str] = None):
+        if event == RuntimeEvent.COURSE_LOADING:
+            typer.echo("Loading course...")
+        elif event == RuntimeEvent.COURSE_LOADED:
+            typer.echo("✓ Course loaded")
+        elif event == RuntimeEvent.COURSE_RESUMING:
+            typer.echo("Resuming course...")
+        elif event == RuntimeEvent.THINKING:
+            typer.echo("Thinking...")
+        elif event == RuntimeEvent.RETRYING:
+            typer.echo(f"  {data}")
+        elif event == RuntimeEvent.SESSION_COMPLETE:
+            typer.echo("✓ Session complete")
+        elif event == RuntimeEvent.ERROR:
+            typer.echo(f"✗ Error: {data}")
 
     try:
         if course_id:
-            # Resume by ID if provided
-            course_info = resume_course(course_id=course_id)
-            typer.echo(f"Resumed course: {course_info['name']}")
-        elif course_name:
-            # Resume by name if provided
-            course_info = resume_course(course_name=course_name)
-            typer.echo(f"Resumed course: {course_info['name']}")
-        else:
+            # Get course name from ID
+            from sensei.persistence.database import get_course
+            course = get_course(course_id=course_id)
+            if not course:
+                typer.echo(f"Error: Course with ID {course_id} not found")
+                return
+            course_name = course['name']
+        elif not course_name:
             # Interactive mode: list courses and ask user to select one
+            from sensei.persistence.database import list_courses
             courses = list_courses()
             if not courses:
                 typer.echo("No courses found to resume.")
@@ -107,15 +145,23 @@ def resume(course_name: str = typer.Argument(None, help="Name of the course to r
             selected_id = typer.prompt("Enter the ID of the course to resume")
             try:
                 selected_id = int(selected_id)
-                course_info = resume_course(course_id=selected_id)
-                typer.echo(f"Resumed course: {course_info['name']}")
+                course = get_course(course_id=selected_id)
+                if not course:
+                    typer.echo(f"Error: Course with ID {selected_id} not found")
+                    return
+                course_name = course['name']
             except ValueError:
                 typer.echo("Invalid ID. Please enter a numeric course ID.")
-            except Exception as e:
-                typer.echo(f"{e}")
+                return
 
-    except ValueError as e:
-        typer.echo(f"{e}")
+        response = run_resume_course(course_name, callback=event_callback)
+        typer.echo("\nResponse:")
+        typer.echo("-" * 50)
+        typer.echo(response)
+        typer.echo("-" * 50)
+
+    except Exception as e:
+        typer.echo(f"Error: {e}")
     
     
 if __name__ == "__main__":
