@@ -1,3 +1,4 @@
+import json
 import typer
 from typing import Optional
 
@@ -14,6 +15,8 @@ def help():
     typer.echo("start-new-course - Starts a new course.")
     typer.echo("resume - Resumes a course from recent checkpoint.")
     typer.echo("complete-course - Marks a course as completed.")
+    typer.echo("delete-course - Deletes an existing course.")
+    typer.echo("rename-course - Renames an existing course.")
 
 
 @app.command()
@@ -82,7 +85,7 @@ Follow the planning workflow:
 2. Review any uploaded resources in the uploads/ directory
 3. Design a personalized learning roadmap
 4. Create the course artifacts (definition.json and planner.md)
-5. Present the roadmap for my approval
+5. Present the roadmap for my approval using the exact format specified in the instructions
 
 Ask me questions one at a time and wait for my responses.
 """
@@ -92,35 +95,60 @@ Ask me questions one at a time and wait for my responses.
 
     # Continue the conversation until planning is complete
     while True:
-        user_input = typer.prompt("\nYour response (or 'continue' to proceed, 'quit' to exit)")
+        user_input = typer.prompt("\nYour response (or 'approve' to start, 'adjust' to modify, 'quit' to exit)")
 
         if user_input.lower() == 'quit':
             typer.echo("Course creation cancelled.")
             return
-        elif user_input.lower() == 'continue':
-            # Check if planning is complete
-            check_prompt = f"""
-Check if the course planning is complete.
+        elif user_input.lower() == 'approve':
+            # Update course status to active
+            from sensei.agent.registry import get_skill
+            write_artifact = get_skill('write_artifact')
 
-Planning is complete when:
-1. You have gathered all necessary information from the learner
-2. You have created definition.json with all course metadata
-3. You have created planner.md with the learning roadmap
-4. You have presented the roadmap for approval
+            # Read current state
+            read_artifact = get_skill('read_artifact')
+            state_content = read_artifact(course_name, 'state.json')
+            state = json.loads(state_content)
 
-If planning is complete, respond with 'PLANNING_COMPLETE' followed by a summary.
-If planning is not complete, continue the interview.
+            # Update status and save
+            state['status'] = "active"
+            state['current_module'] = 0
+            state['current_lesson'] = 0
+            state['progress'] = 0.0
+
+            write_artifact(course_name, 'state.json', json.dumps(state, indent=2))
+
+            typer.echo("\n" + "=" * 60)
+            typer.echo("COURSE APPROVED - LET'S BEGIN!".center(60))
+            typer.echo("=" * 60)
+
+            # Start the course
+            start_prompt = f"""
+The course '{course_name}' has been approved and is now active.
+
+1. Load the course artifacts
+2. Begin teaching from the first module in the roadmap
+3. Follow the teaching philosophy
+4. Create a checkpoint after each milestone
+
+Start teaching now.
 """
-            check_response = run(check_prompt)
-            if "PLANNING_COMPLETE" in check_response:
-                typer.echo("\n" + "=" * 60)
-                typer.echo("COURSE PLANNING COMPLETE".center(60))
-                typer.echo("=" * 60)
-                typer.echo("\n" + check_response.replace("PLANNING_COMPLETE", "").strip())
-                typer.echo("\nThe course is now ready to begin!")
-                break
-            else:
-                typer.echo(check_response)
+            teaching_response = run(start_prompt)
+            typer.echo("\n" + teaching_response)
+            break
+
+        elif user_input.lower() == 'adjust':
+            # Ask for specific adjustments
+            adjust_prompt = f"""
+The learner wants to adjust the roadmap for course '{course_name}'.
+
+1. Ask what specific changes they would like to make
+2. Update the artifacts accordingly
+3. Present the revised roadmap
+4. Ask for approval again
+"""
+            adjust_response = run(adjust_prompt)
+            typer.echo("\n" + adjust_response)
         else:
             # Continue the planning conversation
             response = run(user_input)
@@ -184,6 +212,39 @@ def complete_course(course_id: int = typer.Argument(..., help="ID of the course 
     try:
         course_info = complete_course(course_id)
         typer.echo(f"Course '{course_info['name']}' (ID: {course_info['id']}) marked as completed")
+    except ValueError as e:
+        typer.echo(f"Error: {e}")
+
+
+@app.command()
+def delete_course(course_name: str = typer.Argument(..., help="Name of the course to delete")):
+    """
+    Deletes an existing course and its workspace.
+    """
+    from sensei.agent.registry import get_skill
+
+    delete_skill = get_skill('delete_course')
+    try:
+        delete_skill(course_name)
+        typer.echo(f"Course '{course_name}' deleted successfully.")
+    except ValueError as e:
+        typer.echo(f"Error: {e}")
+
+
+@app.command()
+def rename_course(
+    old_name: str = typer.Argument(..., help="Current name of the course"),
+    new_name: str = typer.Argument(..., help="New name for the course")
+):
+    """
+    Renames an existing course.
+    """
+    from sensei.agent.registry import get_skill
+
+    rename_skill = get_skill('rename_course')
+    try:
+        rename_skill(old_name, new_name)
+        typer.echo(f"Course renamed from '{old_name}' to '{new_name}'.")
     except ValueError as e:
         typer.echo(f"Error: {e}")
 
