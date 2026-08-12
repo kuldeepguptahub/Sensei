@@ -15,7 +15,7 @@ dependencies = [
 ]
 
 [project.scripts]
-sensei = "sensei:main"
+sensei = "sensei.main:main"
 
 [build-system]
 requires = ["hatchling"]

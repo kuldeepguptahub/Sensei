@@ -373,7 +373,7 @@ def rename_course(
         typer.echo(f"Error: {e}")
 
 
-@app.command(name="setup"):
+@app.command("setup")
 def setup_legacy():
     """
     Legacy setup command - use 'connect' instead.
