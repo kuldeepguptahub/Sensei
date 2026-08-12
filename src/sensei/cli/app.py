@@ -1,8 +1,15 @@
+"""
+CLI application for Sensei.
+
+Provides commands for provider setup, course management, and learning.
+"""
+
 import json
 import typer
 from typing import Optional
 
 app = typer.Typer()
+
 
 @app.command()
 def help():
@@ -10,27 +17,135 @@ def help():
     Displays list of available commands and their descriptions.
     """
     typer.echo("Available commands:")
-    typer.echo("setup - Initializes the setup from scratch")
-    typer.echo("list - Lists all available courses and their status.")
-    typer.echo("start-new-course - Starts a new course.")
-    typer.echo("resume - Resumes a course from recent checkpoint.")
-    typer.echo("complete-course - Marks a course as completed.")
-    typer.echo("delete-course - Deletes an existing course.")
-    typer.echo("rename-course - Renames an existing course.")
+    typer.echo("  connect      - Connect to an LLM provider (OpenCode Zen, OpenAI, etc.)")
+    typer.echo("  models       - List available models for connected provider")
+    typer.echo("  current      - Show current provider and model")
+    typer.echo("  list         - List all available courses and their status")
+    typer.echo("  start-new-course - Start a new course")
+    typer.echo("  resume       - Resume a course from recent checkpoint")
+    typer.echo("  complete-course - Mark a course as completed")
+    typer.echo("  delete-course - Delete an existing course")
+    typer.echo("  rename-course - Rename an existing course")
 
 
 @app.command()
-def setup():
+def connect():
     """
-    Initializes the setup from scratch.
-    """
-    typer.echo("Enter the provider and model details for setup:")
-    endpoint_url = typer.prompt("Endpoint URL: ")
-    api_key = typer.prompt("API Key: ")
-    model_name = typer.prompt("Model Name: ")
+    Connect to an LLM provider.
 
+    Interactively select a provider and enter your API key.
+    """
+    from sensei.gateway.providers import list_providers
     from sensei.gateway.config import save_config
-    save_config(endpoint_url, api_key, model_name)
+
+    providers = list_providers()
+
+    typer.echo("\nSelect a provider:\n")
+    for i, provider in enumerate(providers, 1):
+        typer.echo(f"  {i}. {provider['name']}")
+
+    selection = typer.prompt("\nEnter the number of your provider", type=int)
+
+    if selection < 1 or selection > len(providers):
+        typer.echo("Invalid selection.")
+        return
+
+    selected_provider = providers[selection - 1]
+
+    # Get API key (skip for Ollama which doesn't need one)
+    api_key = ""
+    if selected_provider.get("auth_header"):
+        api_key = typer.prompt(f"Enter your {selected_provider['name']} API key", hide_input=True)
+
+    # Get model selection
+    models = selected_provider.get("models", [])
+
+    if not models:
+        typer.echo("\nNo predefined models. Enter model ID manually.")
+        model_id = typer.prompt("Model ID")
+    else:
+        typer.echo(f"\nAvailable models for {selected_provider['name']}:\n")
+        for i, model in enumerate(models, 1):
+            typer.echo(f"  {i}. {model}")
+
+        model_selection = typer.prompt("\nEnter the number of your model", type=int)
+
+        if model_selection < 1 or model_selection > len(models):
+            typer.echo("Invalid selection.")
+            return
+
+        model_id = models[model_selection - 1]
+
+    # Save configuration
+    save_config(
+        provider_name=selected_provider["id"],
+        api_key=api_key,
+        model_id=model_id,
+        base_url=selected_provider["base_url"],
+        auth_header=selected_provider.get("auth_header"),
+        auth_prefix=selected_provider.get("auth_prefix", ""),
+        api_type=selected_provider.get("api_type", "openai"),
+    )
+
+    typer.echo(f"\n✓ Connected to {selected_provider['name']} ({model_id})")
+
+    # Test connection
+    typer.echo("\nTesting connection...")
+    try:
+        from sensei.gateway.client import generate
+        response = generate("Respond with 'OK' to confirm connection.")
+        typer.echo(f"✓ Connection successful!")
+        typer.echo(f"  Response: {response[:100]}...")
+    except Exception as e:
+        typer.echo(f"⚠ Connection test failed: {e}")
+        typer.echo("  You can try again later with 'sensei connect'")
+
+
+@app.command()
+def models():
+    """
+    List available models for the connected provider.
+    """
+    from sensei.gateway.config import load_config, config_exists
+    from sensei.gateway.providers import get_provider
+
+    if not config_exists():
+        typer.echo("No provider connected. Run 'sensei connect' first.")
+        return
+
+    config = load_config()
+    provider = get_provider(config.provider_name)
+
+    if provider and provider.get("models"):
+        typer.echo(f"\nAvailable models for {provider['name']}:\n")
+        for i, model in enumerate(provider["models"], 1):
+            marker = " ← current" if model == config.model_id else ""
+            typer.echo(f"  {i}. {model}{marker}")
+    else:
+        typer.echo(f"\nCurrent model: {config.model_id}")
+        typer.echo("Provider does not have a predefined model list.")
+
+
+@app.command()
+def current():
+    """
+    Show current provider and model configuration.
+    """
+    from sensei.gateway.config import load_config, config_exists
+    from sensei.gateway.providers import get_provider
+
+    if not config_exists():
+        typer.echo("No provider connected. Run 'sensei connect' first.")
+        return
+
+    config = load_config()
+    provider = get_provider(config.provider_name)
+
+    typer.echo("\nCurrent configuration:\n")
+    typer.echo(f"  Provider:    {provider['name'] if provider else config.provider_name}")
+    typer.echo(f"  Model:       {config.model_id}")
+    typer.echo(f"  Base URL:    {config.base_url}")
+    typer.echo(f"  API Type:    {config.api_type}")
 
 
 @app.command()
@@ -38,8 +153,8 @@ def list():
     """
     Lists all the available courses and their status.
     """
-    from sensei.agent import list_skills
-    list_courses = list_skills()['list_courses']
+    from sensei.agent.registry import get_skill
+    list_courses = get_skill('list_courses')
 
     courses = list_courses()
     if not courses:
@@ -55,8 +170,13 @@ def start_new_course():
     """
     Starts a new course.
     """
-    from sensei.agent import run
+    from sensei.agent.runner import run
     from sensei.agent.registry import get_skill
+    from sensei.gateway.config import config_exists
+
+    if not config_exists():
+        typer.echo("No provider connected. Run 'sensei connect' first.")
+        return
 
     course_name = typer.prompt("Enter the name of the new course")
 
@@ -102,7 +222,6 @@ Ask me questions one at a time and wait for my responses.
             return
         elif user_input.lower() == 'approve':
             # Update course status to active
-            from sensei.agent.registry import get_skill
             write_artifact = get_skill('write_artifact')
 
             # Read current state
@@ -161,8 +280,13 @@ def resume(course_name: str = typer.Argument(None, help="Name of the course to r
     """
     Resumes the specified course from recent checkpoint.
     """
-    from sensei.agent import run
+    from sensei.agent.runner import run
     from sensei.persistence.database import get_course
+    from sensei.gateway.config import config_exists
+
+    if not config_exists():
+        typer.echo("No provider connected. Run 'sensei connect' first.")
+        return
 
     if course_id:
         # Get course name from ID
@@ -247,6 +371,17 @@ def rename_course(
         typer.echo(f"Course renamed from '{old_name}' to '{new_name}'.")
     except ValueError as e:
         typer.echo(f"Error: {e}")
+
+
+@app.command(name="setup"):
+def setup_legacy():
+    """
+    Legacy setup command - use 'connect' instead.
+
+    Initializes the setup from scratch.
+    """
+    typer.echo("Note: 'setup' is deprecated. Use 'connect' instead.\n")
+    connect()
 
 
 if __name__ == "__main__":
