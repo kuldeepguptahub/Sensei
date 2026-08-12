@@ -58,7 +58,10 @@ def create_course_state(course_name: str) -> None:
             "current_lesson": 0,
             "competency_index": {},
             "last_accessed": "",
-            "last_updated": ""
+            "last_updated": "",
+            "progress": 0.0,
+            "status": "planning",
+            "last_checkpoint": ""
         }, f)
 
     # Create initial context.md

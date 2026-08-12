@@ -39,12 +39,49 @@ def create_workspace(course_name: str) -> None:
     uploads_dir = course_dir / "uploads"
     uploads_dir.mkdir()
 
-    # Create empty artifacts
-    (artifacts_dir / "definition.json").write_text('{}')
-    (artifacts_dir / "planner.md").write_text('')
-    (artifacts_dir / "state.json").write_text('{}')
-    (artifacts_dir / "context.md").write_text('')
-    (artifacts_dir / "notes.md").write_text('')
+    # Create initial definition.json
+    definition_path = artifacts_dir / "definition.json"
+    with open(definition_path, 'w') as f:
+        json.dump({
+            "course_name": "",
+            "topic": "",
+            "goals": [],
+            "desired_outcome": "",
+            "portfolio_project": "",
+            "current_knowledge": "",
+            "learning_style": "",
+            "constraints": [],
+            "completion_criteria": ""
+        }, f)
+
+    # Create initial state.json
+    state_path = artifacts_dir / "state.json"
+    with open(state_path, 'w') as f:
+        json.dump({
+            "current_module": 0,
+            "current_lesson": 0,
+            "competency_index": {},
+            "last_accessed": "",
+            "last_updated": "",
+            "progress": 0.0,
+            "status": "planning",
+            "last_checkpoint": ""
+        }, f)
+
+    # Create initial context.md
+    context_path = artifacts_dir / "context.md"
+    with open(context_path, 'w') as f:
+        f.write("# Course Context\n")
+
+    # Create initial notes.md
+    notes_path = artifacts_dir / "notes.md"
+    with open(notes_path, 'w') as f:
+        f.write("# Session Notes\n")
+
+    # Create initial planner.md
+    planner_path = artifacts_dir / "planner.md"
+    with open(planner_path, 'w') as f:
+        f.write("# Learning Roadmap\n\n")
 
 
 def list_courses() -> List[Dict[str, Any]]:
