@@ -118,7 +118,8 @@ def extract_text_before_tool_call(text: str) -> str:
     return text
 
 
-def run(prompt: str, context: Optional[Dict[str, Any]] = None, verbose: bool = False) -> str:
+def run(prompt: str, context: Optional[Dict[str, Any]] = None, verbose: bool = False,
+        history: Optional[list] = None) -> str:
     """
     Run the Sensei agent with the given prompt and context.
 
@@ -129,6 +130,7 @@ def run(prompt: str, context: Optional[Dict[str, Any]] = None, verbose: bool = F
         prompt: The user prompt to process
         context: Optional context data for the agent
         verbose: If True, print tool call progress (default: False)
+        history: Optional list of prior conversation messages [{"role": ..., "content": ...}]
 
     Returns:
         The final generated response from the agent
@@ -144,9 +146,15 @@ def run(prompt: str, context: Optional[Dict[str, Any]] = None, verbose: bool = F
 
     # Initialize conversation history
     conversation = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": prompt}
+        {"role": "system", "content": system_prompt}
     ]
+
+    # Add prior history if provided
+    if history:
+        conversation.extend(history)
+
+    # Add current user prompt
+    conversation.append({"role": "user", "content": prompt})
 
     # Add context if provided
     if context:
