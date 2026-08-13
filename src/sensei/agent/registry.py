@@ -9,7 +9,8 @@ from ..skills.courses import (
     create_workspace,
     list_courses,
     delete_course,
-    rename_course
+    rename_course,
+    update_state
 )
 from ..skills.artifacts import (
     read_artifact,
@@ -30,6 +31,7 @@ _skill_registry: Dict[str, Callable] = {
     'list_courses': list_courses,
     'delete_course': delete_course,
     'rename_course': rename_course,
+    'update_state': update_state,
 
     # Artifacts skills
     'read_artifact': read_artifact,
