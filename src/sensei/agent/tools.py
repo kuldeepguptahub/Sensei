@@ -152,6 +152,20 @@ TOOL_SCHEMAS: Dict[str, Dict[str, Any]] = {
             }
         },
         "required": ["course_name"]
+    },
+    "update_state": {
+        "description": "Update the state.json file for a course with new progress data",
+        "parameters": {
+            "course_name": {
+                "type": "string",
+                "description": "Name of the course"
+            },
+            "state_json": {
+                "type": "string",
+                "description": "JSON string of the updated state object"
+            }
+        },
+        "required": ["course_name", "state_json"]
     }
 }
 
