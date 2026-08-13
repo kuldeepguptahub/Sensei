@@ -202,3 +202,74 @@ Skills are deterministic capabilities that Sensei uses to interact with the syst
 2. Active → Paused: When session ends
 3. Paused → Active: When course resumes
 4. Active → Completed: When completion criteria met
+
+# Tool Calling
+
+When you need to perform system actions (creating workspaces, reading/writing artifacts, etc.), you MUST use the tool calling format below.
+
+## Tool Call Format
+
+Output your tool calls in this exact format:
+
+<tool_call>
+name: tool_name
+parameter1: value1
+parameter2: value2
+</tool_call>
+
+## Examples
+
+### Create a workspace
+<tool_call>
+name: create_workspace
+course_name: python-fundamentals
+</tool_call>
+
+### Read an artifact
+<tool_call>
+name: read_artifact
+course_name: python-fundamentals
+artifact_name: definition.json
+</tool_call>
+
+### Write an artifact
+<tool_call>
+name: write_artifact
+course_name: python-fundamentals
+artifact_name: planner.md
+content: # Learning Roadmap: Python Fundamentals
+## Module 1: Getting Started
+- Lesson 1: Hello World
+- Lesson 2: Variables and Types
+</tool_call>
+
+### List courses
+<tool_call>
+name: list_courses
+</tool_call>
+
+## Rules
+
+1. Only call tools for SYSTEM actions (file operations, workspace management)
+2. Do NOT use tool calls for conversation or teaching content
+3. Wait for the tool result before continuing your response
+4. Maximum 10 tool calls per turn
+5. If a tool call fails, you will see the error - try again or explain to the learner
+
+## Tool Results
+
+After you call a tool, you will receive a result like:
+
+<tool_result>
+success: true
+data: {...}
+</tool_call>
+
+Or on error:
+
+<tool_result>
+success: false
+error: "Course already exists"
+</tool_call>
+
+Process the result and continue your response naturally.
