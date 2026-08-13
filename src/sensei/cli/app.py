@@ -170,7 +170,7 @@ def start_new_course():
     """
     Starts a new course.
     """
-    from sensei.agent.runner import run
+    from sensei.agent.session import Session
     from sensei.agent.registry import get_skill
     from sensei.gateway.config import config_exists
 
@@ -196,6 +196,9 @@ def start_new_course():
     typer.echo("\nSensei will now interview you to understand your goals")
     typer.echo("and create a personalized learning plan.\n")
 
+    # Create session for the planning conversation
+    session = Session(course_name)
+
     # Start the planning conversation
     planning_prompt = f"""
 Create a new course called '{course_name}'.
@@ -210,7 +213,7 @@ Follow the planning workflow:
 Ask me questions one at a time and wait for my responses.
 """
 
-    response = run(planning_prompt)
+    response = session.send(planning_prompt)
     typer.echo(response)
 
     # Continue the conversation until planning is complete
@@ -222,20 +225,12 @@ Ask me questions one at a time and wait for my responses.
             return
         elif user_input.lower() == 'approve':
             # Update course status to active
-            write_artifact = get_skill('write_artifact')
-
-            # Read current state
-            read_artifact = get_skill('read_artifact')
-            state_content = read_artifact(course_name, 'state.json')
-            state = json.loads(state_content)
-
-            # Update status and save
-            state['status'] = "active"
-            state['current_module'] = 0
-            state['current_lesson'] = 0
-            state['progress'] = 0.0
-
-            write_artifact(course_name, 'state.json', json.dumps(state, indent=2))
+            session.update_state(
+                status="active",
+                current_module=0,
+                current_lesson=0,
+                progress=0.0
+            )
 
             typer.echo("\n" + "=" * 60)
             typer.echo("COURSE APPROVED - LET'S BEGIN!".center(60))
@@ -252,7 +247,7 @@ The course '{course_name}' has been approved and is now active.
 
 Start teaching now.
 """
-            teaching_response = run(start_prompt)
+            teaching_response = session.send(start_prompt)
             typer.echo("\n" + teaching_response)
             break
 
@@ -266,11 +261,11 @@ The learner wants to adjust the roadmap for course '{course_name}'.
 3. Present the revised roadmap
 4. Ask for approval again
 """
-            adjust_response = run(adjust_prompt)
+            adjust_response = session.send(adjust_prompt)
             typer.echo("\n" + adjust_response)
         else:
             # Continue the planning conversation
-            response = run(user_input)
+            response = session.send(user_input)
             typer.echo("\n" + response)
 
 
@@ -280,7 +275,7 @@ def resume(course_name: str = typer.Argument(None, help="Name of the course to r
     """
     Resumes the specified course from recent checkpoint.
     """
-    from sensei.agent.runner import run
+    from sensei.agent.session import Session
     from sensei.persistence.database import get_course
     from sensei.gateway.config import config_exists
 
@@ -320,9 +315,20 @@ def resume(course_name: str = typer.Argument(None, help="Name of the course to r
             typer.echo("Invalid number.")
             return
 
-    # Hand control to the agent for resuming
+    # Create session and resume teaching
     typer.echo(f"\nResuming course: {course_name}")
-    response = run(f"Resume the course '{course_name}'. Load the current state and continue teaching from where we left off.")
+    session = Session(course_name)
+
+    resume_prompt = f"""
+The course '{course_name}' is being resumed.
+
+1. Load the current state and continue from where we left off
+2. Review what was covered in the previous session
+3. Continue teaching from the current module and lesson
+
+Start teaching now.
+"""
+    response = session.send(resume_prompt)
     typer.echo("\n" + response)
 
 
