@@ -133,3 +133,43 @@ def load_course_state(course_name: str) -> Dict[str, Any]:
         "notes": notes,
         "planner": planner
     }
+
+
+def save_course_state(course_name: str, state: Dict[str, Any]) -> None:
+    """
+    Save the state for a course.
+
+    Args:
+        course_name: The name of the course
+        state: The state dictionary to save
+
+    Raises:
+        FileNotFoundError: If the course directory doesn't exist
+    """
+    artifacts_dir = COURSES_DIR / course_name / "artifacts"
+    if not artifacts_dir.exists():
+        raise FileNotFoundError(f"Course '{course_name}' does not exist")
+
+    state_path = artifacts_dir / "state.json"
+    with open(state_path, 'w') as f:
+        json.dump(state, f, indent=2)
+
+
+def update_context(course_name: str, content: str) -> None:
+    """
+    Update the context.md file for a course.
+
+    Args:
+        course_name: The name of the course
+        content: The new context content
+
+    Raises:
+        FileNotFoundError: If the course directory doesn't exist
+    """
+    artifacts_dir = COURSES_DIR / course_name / "artifacts"
+    if not artifacts_dir.exists():
+        raise FileNotFoundError(f"Course '{course_name}' does not exist")
+
+    context_path = artifacts_dir / "context.md"
+    with open(context_path, 'w') as f:
+        f.write(content)
