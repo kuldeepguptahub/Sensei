@@ -142,3 +142,30 @@ def rename_course(old_name: str, new_name: str) -> None:
         raise ValueError(f"Course '{new_name}' already exists")
 
     old_dir.rename(new_dir)
+
+
+def update_state(course_name: str, state_json: str) -> None:
+    """
+    Update the state.json file for a course.
+
+    Args:
+        course_name: Name of the course
+        state_json: JSON string of the state to save
+
+    Raises:
+        ValueError: If the course doesn't exist or JSON is invalid
+    """
+    import json
+
+    course_dir = COURSES_DIR / course_name
+    if not course_dir.exists():
+        raise ValueError(f"Course '{course_name}' doesn't exist")
+
+    try:
+        state = json.loads(state_json)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Invalid JSON: {e}")
+
+    state_path = course_dir / "artifacts" / "state.json"
+    with open(state_path, 'w') as f:
+        json.dump(state, f, indent=2)
