@@ -40,8 +40,8 @@ class TestValidateCourseName:
         assert validate_course_name("x" * 100) == "x" * 100
 
     def test_rejects_spaces(self):
-        with pytest.raises(ValueError, match="Invalid course name"):
-            validate_course_name("my course")
+        # Spaces are now allowed and converted to hyphens
+        assert validate_course_name("my course") == "my-course"
 
     def test_rejects_special_chars(self):
         with pytest.raises(ValueError, match="Invalid course name"):

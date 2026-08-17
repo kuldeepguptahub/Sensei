@@ -10,8 +10,8 @@ import json
 from typing import Dict, Any
 
 
-# Strict pattern: alphanumeric, hyphens, underscores only
-_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
+# Pattern: alphanumeric, hyphens, underscores, spaces (spaces converted to hyphens)
+_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_\- ]+$")
 _MAX_NAME_LENGTH = 100
 _MAX_FILE_NAME_LENGTH = 255
 
@@ -23,14 +23,15 @@ def validate_course_name(name: str) -> str:
     Rules:
     - Cannot be empty or whitespace only
     - Max 100 characters
-    - Only alphanumeric, hyphens, and underscores
+    - Only alphanumeric, hyphens, underscores, and spaces
+    - Spaces are converted to hyphens
     - No path separators or traversal
 
     Args:
         name: Raw course name input
 
     Returns:
-        Stripped, validated course name
+        Stripped, validated course name (spaces converted to hyphens)
 
     Raises:
         ValueError: If the name is invalid
@@ -49,8 +50,11 @@ def validate_course_name(name: str) -> str:
     if not _NAME_PATTERN.match(name):
         raise ValueError(
             f"Invalid course name '{name}'. "
-            f"Only letters, numbers, hyphens, and underscores are allowed."
+            f"Only letters, numbers, hyphens, underscores, and spaces are allowed."
         )
+
+    # Convert spaces to hyphens for directory name
+    name = name.replace(" ", "-")
 
     return name
 

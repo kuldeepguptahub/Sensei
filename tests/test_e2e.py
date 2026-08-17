@@ -568,9 +568,8 @@ class TestE2EValidationIntegration:
         from sensei.skills.courses import create_workspace
         from sensei.validation import validate_course_name
 
-        # Should reject names with spaces
-        with pytest.raises(ValueError, match="Invalid course name"):
-            validate_course_name("my course")
+        # Spaces are now allowed (converted to hyphens)
+        assert validate_course_name("my course") == "my-course"
 
         # Should reject path traversal
         with pytest.raises(ValueError, match="Invalid course name"):

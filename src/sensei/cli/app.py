@@ -235,8 +235,13 @@ Follow the planning workflow:
 Ask me questions one at a time and wait for my responses.
 """
 
-    response = session.send(planning_prompt)
-    typer.echo(response)
+    try:
+        response = session.send(planning_prompt)
+        typer.echo(response)
+    except Exception as e:
+        typer.echo(f"\nError: {e}")
+        if verbose:
+            traceback.print_exc()
 
     # Continue the conversation until planning is complete
     while True:
@@ -269,8 +274,13 @@ The course '{course_name}' has been approved and is now active.
 
 Start teaching now.
 """
-            teaching_response = session.send(start_prompt)
-            typer.echo("\n" + teaching_response)
+            try:
+                teaching_response = session.send(start_prompt)
+                typer.echo("\n" + teaching_response)
+            except Exception as e:
+                typer.echo(f"\nError: {e}")
+                if verbose:
+                    traceback.print_exc()
             break
 
         elif user_input.lower() == 'adjust':
@@ -283,12 +293,22 @@ The learner wants to adjust the roadmap for course '{course_name}'.
 3. Present the revised roadmap
 4. Ask for approval again
 """
-            adjust_response = session.send(adjust_prompt)
-            typer.echo("\n" + adjust_response)
+            try:
+                adjust_response = session.send(adjust_prompt)
+                typer.echo("\n" + adjust_response)
+            except Exception as e:
+                typer.echo(f"\nError: {e}")
+                if verbose:
+                    traceback.print_exc()
         else:
             # Continue the planning conversation
-            response = session.send(user_input)
-            typer.echo("\n" + response)
+            try:
+                response = session.send(user_input)
+                typer.echo("\n" + response)
+            except Exception as e:
+                typer.echo(f"\nError: {e}")
+                if verbose:
+                    traceback.print_exc()
 
 
 @app.command()
