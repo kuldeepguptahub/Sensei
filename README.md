@@ -2,6 +2,48 @@
 
 > Transform documentation into an interactive, project-based learning experience powered by your favorite LLM.
 
+## Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/kuldeepguptahub/sensei.git
+cd sensei
+
+# Install dependencies
+uv sync
+
+# Install the package in development mode
+uv pip install -e .
+```
+
+## Quick Start
+
+```bash
+# Set up your LLM provider
+sensei setup --provider openai --api-key YOUR_KEY
+
+# Check available models
+sensei models
+
+# Start learning a topic
+sensei start fastapi
+
+# Or resume an existing course
+sensei resume fastapi
+```
+
+## Commands Reference
+
+| Command | Description |
+|---------|-------------|
+| `sensei setup` | Configure LLM provider and API key |
+| `sensei models` | List available models from configured provider |
+| `sensei models --provider NAME` | List models from a specific provider |
+| `sensei start TOPIC` | Start a new interactive course |
+| `sensei resume TOPIC` | Resume a previously started course |
+| `sensei courses` | List all your courses |
+| `sensei connect` | Verify provider connection |
+
 ## Why Sensei?
 
 This project started as a personal experiment.
