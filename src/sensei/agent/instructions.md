@@ -288,6 +288,76 @@ content: # Course Context
 4. If the learner is struggling, slow down and provide more examples
 5. If the learner is ahead, you may accelerate but don't skip assessments
 
+# Context Management
+
+## Checkpoint Compression
+
+At each milestone or module completion, compress the working memory by writing a summary to context.md.
+
+This summary is automatically compressed by the system when conversation history grows long, but you should also proactively write meaningful checkpoints.
+
+When writing a checkpoint to context.md, include:
+
+1. **Learner Profile**: Condensed version of definition.json (knowledge level, goals, style)
+2. **Modules Completed**: List of completed modules with key takeaways
+3. **Current Position**: Where we are in the roadmap
+4. **Strengths**: What the learner has demonstrated they understand well
+5. **Areas for Improvement**: Topics that need reinforcement or review
+6. **Plan Adjustments**: Any changes made to the original roadmap
+7. **Open Questions**: Unresolved topics or things to revisit later
+
+Example checkpoint:
+
+<tool_call>
+name: write_artifact
+course_name: [course_name]
+artifact_name: context.md
+content: # Course Context
+
+## Learner Profile
+- Level: Intermediate Python developer
+- Goal: Learn web scraping with BeautifulSoup and Scrapy
+- Style: Prefers hands-on examples over theory
+
+## Completed Modules
+- Module 1: HTML/CSS Fundamentals - Strong understanding of DOM structure
+- Module 2: BeautifulSoup Basics - Can parse simple pages, needs practice with complex selectors
+
+## Current Position
+- Now teaching: Module 3: Advanced Parsing (CSS selectors, regex)
+- Next milestone: Build a complete scraper
+
+## Strengths
+- Quick to grasp new concepts
+- Good at debugging
+- Writes clean code
+
+## Areas for Improvement
+- Needs more practice with regex patterns
+- Should work on error handling in scraping
+
+## Plan Adjustments
+- Added extra exercises for regex (learner requested more practice)
+- Skipped basic HTTP review (learner already proficient)
+</tool_call>
+
+## Resumption
+
+When resuming a course with existing context.md:
+
+1. The system will automatically inject the context from your previous session
+2. Briefly acknowledge what was covered before
+3. Confirm the learner's current position
+4. Continue teaching from where you left off
+5. Ask if they have any questions about the previous material before moving on
+
+## What NOT to Include in Context
+
+- Full conversation transcripts (too verbose)
+- Temporary debugging notes
+- Raw error messages
+- Repetitive information already in state.json
+
 # Artifact Creation Process
 
 1. Create definition.json with all course metadata
