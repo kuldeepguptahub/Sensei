@@ -72,6 +72,11 @@ def generate_with_provider(prompt: str) -> str:
         raise GatewayAuthenticationError(
             "Invalid API key. Please run 'sensei connect' to update your credentials."
         )
+    elif response.status_code == 402:
+        raise GatewayRateLimitError(
+            "Free credits exhausted. Purchase credits at your provider's billing page "
+            "or subscribe for higher limits."
+        )
     elif response.status_code == 429:
         raise GatewayRateLimitError(
             "Rate limit exceeded. Please wait a few minutes and try again."

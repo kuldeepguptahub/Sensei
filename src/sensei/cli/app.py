@@ -21,6 +21,7 @@ def help():
     typer.echo("  connect      - Connect to an LLM provider (OpenCode Zen, OpenAI, etc.)")
     typer.echo("  models       - List available models for connected provider")
     typer.echo("  current      - Show current provider and model")
+    typer.echo("  reset        - Reset config to default (no provider)")
     typer.echo("  list         - List all available courses and their status")
     typer.echo("  start-new-course - Start a new course (--verbose for details)")
     typer.echo("  resume       - Resume a course from recent checkpoint (--verbose for details)")
@@ -443,6 +444,21 @@ def setup_legacy():
     """
     typer.echo("Note: 'setup' is deprecated. Use 'connect' instead.\n")
     connect()
+
+
+@app.command()
+def reset():
+    """
+    Reset config.toml to default (no provider, no model, no API key).
+    """
+    from sensei.gateway.config import delete_config, config_exists
+
+    if not config_exists():
+        typer.echo("No config to reset.")
+        return
+
+    delete_config()
+    typer.echo("Config reset. Run 'sensei connect' to set up a new provider.")
 
 
 if __name__ == "__main__":
