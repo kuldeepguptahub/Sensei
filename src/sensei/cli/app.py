@@ -21,8 +21,8 @@ def help():
     typer.echo("  models       - List available models for connected provider")
     typer.echo("  current      - Show current provider and model")
     typer.echo("  list         - List all available courses and their status")
-    typer.echo("  start-new-course - Start a new course")
-    typer.echo("  resume       - Resume a course from recent checkpoint")
+    typer.echo("  start-new-course - Start a new course (--verbose for details)")
+    typer.echo("  resume       - Resume a course from recent checkpoint (--verbose for details)")
     typer.echo("  complete-course - Mark a course as completed")
     typer.echo("  delete-course - Delete an existing course")
     typer.echo("  rename-course - Rename an existing course")
@@ -166,7 +166,7 @@ def list():
 
 
 @app.command()
-def start_new_course():
+def start_new_course(verbose: bool = typer.Option(False, "--verbose", "-v", help="Show tool calls and compression activity")):
     """
     Starts a new course.
     """
@@ -197,7 +197,7 @@ def start_new_course():
     typer.echo("and create a personalized learning plan.\n")
 
     # Create session for the planning conversation
-    session = Session(course_name)
+    session = Session(course_name, verbose=verbose)
 
     # Start the planning conversation
     planning_prompt = f"""
@@ -271,7 +271,8 @@ The learner wants to adjust the roadmap for course '{course_name}'.
 
 @app.command()
 def resume(course_name: str = typer.Argument(None, help="Name of the course to resume."),
-           course_id: int = typer.Option(None, "--id", help="ID of the course to resume")):
+           course_id: int = typer.Option(None, "--id", help="ID of the course to resume"),
+           verbose: bool = typer.Option(False, "--verbose", "-v", help="Show tool calls and compression activity")):
     """
     Resumes the specified course from recent checkpoint.
     """
@@ -317,7 +318,7 @@ def resume(course_name: str = typer.Argument(None, help="Name of the course to r
 
     # Create session and resume teaching
     typer.echo(f"\nResuming course: {course_name}")
-    session = Session(course_name)
+    session = Session(course_name, verbose=verbose)
 
     resume_prompt = f"""
 The course '{course_name}' is being resumed.
