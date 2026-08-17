@@ -81,6 +81,17 @@ PROVIDERS: Dict[str, Dict] = {
             "mixtral-8x7b-32768",
         ]
     },
+    "huggingface": {
+        "name": "Hugging Face",
+        "base_url": "https://router.huggingface.co/v1",
+        "auth_header": "Authorization",
+        "auth_prefix": "Bearer",
+        "api_type": "openai",
+        "models": [
+            "openai/gpt-oss-20b",
+            "openai/gpt-oss-120b",
+        ]
+    },
 }
 
 
