@@ -4,6 +4,28 @@ All notable changes to Sensei will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.2.0] - 2026-08-17
+
+### Added
+- Teaching loop with competency evaluation
+- Context management with history window and compression
+- Session class for stateful interactions
+- Progression tracking for lesson advancement
+- Validation module for input sanitization
+- Path safety utilities for filesystem operations
+- Verbose mode for debugging
+- Comprehensive test suite (81 tests)
+
+### Changed
+- Agent instructions now include teaching loop guidance
+- Gateway error messages are more user-friendly
+- CLI error handling improved with clear guidance
+- Skills use validation module for input validation
+
+### Fixed
+- Path traversal vulnerabilities in course/artifact names
+- Inconsistent error messages across CLI commands
+
 ## [0.1.0] - 2026-08-03
 
 ### Added
