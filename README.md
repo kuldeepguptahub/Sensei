@@ -19,8 +19,12 @@ uv pip install -e .
 ## Quick Start
 
 ```bash
-# Set up your LLM provider
-sensei setup --provider openai --api-key YOUR_KEY
+# Set up your LLM provider (Hugging Face has a free tier)
+sensei connect
+
+# Or connect directly to Hugging Face
+# 1. Get a token at huggingface.co/settings/tokens
+# 2. Run: sensei connect → select "Hugging Face" → paste token
 
 # Check available models
 sensei models
