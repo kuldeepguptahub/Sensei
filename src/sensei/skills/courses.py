@@ -6,11 +6,10 @@ These skills manage workspace lifecycle.
 
 import json
 import shutil
-from pathlib import Path
 from typing import Dict, Any, List
 
-# Base directory for courses
-COURSES_DIR = Path("courses")
+from ..path_utils import safe_course_path, safe_artifact_path, safe_artifacts_dir, COURSES_DIR
+from ..validation import validate_state_json
 
 
 def create_workspace(course_name: str) -> None:
@@ -21,10 +20,10 @@ def create_workspace(course_name: str) -> None:
         course_name: Name of the course to create
 
     Raises:
-        ValueError: If the course already exists
+        ValueError: If the course already exists or name is invalid
         OSError: If workspace creation fails
     """
-    course_dir = COURSES_DIR / course_name
+    course_dir = safe_course_path(course_name)
     if course_dir.exists():
         raise ValueError(f"Course '{course_name}' already exists")
 
@@ -111,10 +110,10 @@ def delete_course(course_name: str) -> None:
         course_name: Name of the course to delete
 
     Raises:
-        ValueError: If the course doesn't exist
+        ValueError: If the course doesn't exist or name is invalid
         OSError: If deletion fails
     """
-    course_dir = COURSES_DIR / course_name
+    course_dir = safe_course_path(course_name)
     if not course_dir.exists():
         raise ValueError(f"Course '{course_name}' doesn't exist")
 
@@ -130,11 +129,12 @@ def rename_course(old_name: str, new_name: str) -> None:
         new_name: New course name
 
     Raises:
-        ValueError: If the old course doesn't exist or new name already exists
+        ValueError: If names are invalid, old course doesn't exist,
+                   or new name already exists
         OSError: If renaming fails
     """
-    old_dir = COURSES_DIR / old_name
-    new_dir = COURSES_DIR / new_name
+    old_dir = safe_course_path(old_name)
+    new_dir = safe_course_path(new_name)
 
     if not old_dir.exists():
         raise ValueError(f"Course '{old_name}' doesn't exist")
@@ -153,18 +153,14 @@ def update_state(course_name: str, state_json: str) -> None:
         state_json: JSON string of the state to save
 
     Raises:
-        ValueError: If the course doesn't exist or JSON is invalid
+        ValueError: If the course doesn't exist, name is invalid, or JSON is invalid
     """
-    import json
-
-    course_dir = COURSES_DIR / course_name
+    course_dir = safe_course_path(course_name)
     if not course_dir.exists():
         raise ValueError(f"Course '{course_name}' doesn't exist")
 
-    try:
-        state = json.loads(state_json)
-    except json.JSONDecodeError as e:
-        raise ValueError(f"Invalid JSON: {e}")
+    # Validate the JSON structure
+    state = validate_state_json(state_json)
 
     state_path = course_dir / "artifacts" / "state.json"
     with open(state_path, 'w') as f:

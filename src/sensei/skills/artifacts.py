@@ -4,12 +4,9 @@ Artifact skills for Sensei.
 These skills manage persistent knowledge in course workspaces.
 """
 
-import json
-from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
-# Base directory for courses
-COURSES_DIR = Path("courses")
+from ..path_utils import safe_course_path, safe_artifact_path, safe_artifacts_dir
 
 
 def read_artifact(course_name: str, artifact_name: str) -> str:
@@ -24,10 +21,10 @@ def read_artifact(course_name: str, artifact_name: str) -> str:
         Content of the artifact
 
     Raises:
-        ValueError: If the course or artifact doesn't exist
+        ValueError: If the course or artifact doesn't exist, or names are invalid
         OSError: If reading fails
     """
-    artifact_path = COURSES_DIR / course_name / "artifacts" / artifact_name
+    artifact_path = safe_artifact_path(course_name, artifact_name)
     if not artifact_path.exists():
         raise ValueError(f"Artifact '{artifact_name}' not found in course '{course_name}'")
 
@@ -44,10 +41,10 @@ def write_artifact(course_name: str, artifact_name: str, content: str) -> None:
         content: Content to write to the artifact
 
     Raises:
-        ValueError: If the course doesn't exist
+        ValueError: If the course doesn't exist or names are invalid
         OSError: If writing fails
     """
-    artifact_path = COURSES_DIR / course_name / "artifacts" / artifact_name
+    artifact_path = safe_artifact_path(course_name, artifact_name)
     if not artifact_path.parent.exists():
         raise ValueError(f"Course '{course_name}' doesn't exist")
 
@@ -65,9 +62,9 @@ def list_artifacts(course_name: str) -> Dict[str, Dict[str, Any]]:
         Dictionary of artifact information
 
     Raises:
-        ValueError: If the course doesn't exist
+        ValueError: If the course doesn't exist or name is invalid
     """
-    artifacts_dir = COURSES_DIR / course_name / "artifacts"
+    artifacts_dir = safe_artifacts_dir(course_name)
     if not artifacts_dir.exists():
         raise ValueError(f"Course '{course_name}' doesn't exist")
 

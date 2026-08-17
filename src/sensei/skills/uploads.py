@@ -4,12 +4,9 @@ Upload skills for Sensei.
 These skills manage user-provided resources during planning.
 """
 
-import shutil
-from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any
 
-# Base directory for courses
-COURSES_DIR = Path("courses")
+from ..path_utils import safe_course_path, safe_upload_path, safe_uploads_dir
 
 
 def save_upload(course_name: str, file_name: str, content: bytes) -> None:
@@ -22,10 +19,10 @@ def save_upload(course_name: str, file_name: str, content: bytes) -> None:
         content: File content as bytes
 
     Raises:
-        ValueError: If the course doesn't exist
+        ValueError: If the course doesn't exist or names are invalid
         OSError: If saving fails
     """
-    upload_path = COURSES_DIR / course_name / "uploads" / file_name
+    upload_path = safe_upload_path(course_name, file_name)
     if not upload_path.parent.exists():
         raise ValueError(f"Course '{course_name}' doesn't exist")
 
@@ -44,10 +41,10 @@ def read_upload(course_name: str, file_name: str) -> bytes:
         File content as bytes
 
     Raises:
-        ValueError: If the course or file doesn't exist
+        ValueError: If the course or file doesn't exist, or names are invalid
         OSError: If reading fails
     """
-    upload_path = COURSES_DIR / course_name / "uploads" / file_name
+    upload_path = safe_upload_path(course_name, file_name)
     if not upload_path.exists():
         raise ValueError(f"Upload '{file_name}' not found in course '{course_name}'")
 
@@ -65,9 +62,9 @@ def list_uploads(course_name: str) -> Dict[str, Dict[str, Any]]:
         Dictionary of upload information
 
     Raises:
-        ValueError: If the course doesn't exist
+        ValueError: If the course doesn't exist or name is invalid
     """
-    uploads_dir = COURSES_DIR / course_name / "uploads"
+    uploads_dir = safe_uploads_dir(course_name)
     if not uploads_dir.exists():
         raise ValueError(f"Course '{course_name}' doesn't exist")
 
