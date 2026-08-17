@@ -136,10 +136,16 @@ def load_config() -> GatewayConfig:
                     api_type="openai",
                 )
 
-        raise ValueError("Invalid config format. Please run 'sensei connect' to set up.")
+        raise ValueError(
+            "Invalid config format. The config.toml file is malformed. "
+            "Please run 'sensei connect' to reconfigure."
+        )
 
     except FileNotFoundError:
-        raise FileNotFoundError("Config file not found. Please run 'sensei connect' first.")
+        raise FileNotFoundError(
+            "Config file not found. No LLM provider is configured. "
+            "Please run 'sensei connect' to set up a provider."
+        )
 
 
 def delete_config():

@@ -69,13 +69,23 @@ def generate_with_provider(prompt: str) -> str:
 
     # Handle HTTP status codes
     if response.status_code == 401:
-        raise GatewayAuthenticationError("Invalid API key. Please run 'sensei connect' to update.")
+        raise GatewayAuthenticationError(
+            "Invalid API key. Please run 'sensei connect' to update your credentials."
+        )
     elif response.status_code == 429:
-        raise GatewayRateLimitError("Rate limit exceeded. Please wait and try again.")
+        raise GatewayRateLimitError(
+            "Rate limit exceeded. Please wait a few minutes and try again."
+        )
     elif response.status_code >= 500:
-        raise GatewayConnectionError(f"Server error ({response.status_code}): {response.text[:200]}")
+        raise GatewayConnectionError(
+            f"Server error from {config.provider_name} ({response.status_code}). "
+            f"Please try again later or use a different provider."
+        )
     elif response.status_code != 200:
-        raise GatewayResponseError(f"Unexpected response ({response.status_code}): {response.text[:200]}")
+        raise GatewayResponseError(
+            f"Unexpected response from {config.provider_name} ({response.status_code}). "
+            f"Please check your configuration with 'sensei current'."
+        )
 
     # Parse response
     return _parse_response(response.json(), config.api_type)

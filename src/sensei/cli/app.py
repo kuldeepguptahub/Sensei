@@ -6,6 +6,7 @@ Provides commands for provider setup, course management, and learning.
 
 import json
 import typer
+import traceback
 from typing import Optional
 
 app = typer.Typer()
@@ -173,6 +174,7 @@ def start_new_course(verbose: bool = typer.Option(False, "--verbose", "-v", help
     from sensei.agent.session import Session
     from sensei.agent.registry import get_skill
     from sensei.gateway.config import config_exists
+    from sensei.validation import validate_course_name
 
     if not config_exists():
         typer.echo("No provider connected. Run 'sensei connect' first.")
@@ -180,12 +182,22 @@ def start_new_course(verbose: bool = typer.Option(False, "--verbose", "-v", help
 
     course_name = typer.prompt("Enter the name of the new course")
 
+    # Validate course name
+    try:
+        course_name = validate_course_name(course_name)
+    except ValueError as e:
+        typer.echo(f"Error: {e}")
+        return
+
     # Create workspace using skill
     create_workspace = get_skill('create_workspace')
     try:
         create_workspace(course_name)
         typer.echo(f"Workspace created for course: {course_name}")
-    except Exception as e:
+    except ValueError as e:
+        typer.echo(f"Error: {e}")
+        return
+    except OSError as e:
         typer.echo(f"Error creating workspace: {e}")
         return
 
@@ -197,7 +209,16 @@ def start_new_course(verbose: bool = typer.Option(False, "--verbose", "-v", help
     typer.echo("and create a personalized learning plan.\n")
 
     # Create session for the planning conversation
-    session = Session(course_name, verbose=verbose)
+    try:
+        session = Session(course_name, verbose=verbose)
+    except FileNotFoundError as e:
+        typer.echo(f"Error loading course: {e}")
+        return
+    except Exception as e:
+        typer.echo(f"Error initializing session: {e}")
+        if verbose:
+            traceback.print_exc()
+        return
 
     # Start the planning conversation
     planning_prompt = f"""
@@ -279,6 +300,7 @@ def resume(course_name: str = typer.Argument(None, help="Name of the course to r
     from sensei.agent.session import Session
     from sensei.persistence.database import get_course
     from sensei.gateway.config import config_exists
+    from sensei.validation import validate_course_name
 
     if not config_exists():
         typer.echo("No provider connected. Run 'sensei connect' first.")
@@ -315,10 +337,27 @@ def resume(course_name: str = typer.Argument(None, help="Name of the course to r
         except ValueError:
             typer.echo("Invalid number.")
             return
+    else:
+        # Validate course name if provided directly
+        try:
+            course_name = validate_course_name(course_name)
+        except ValueError as e:
+            typer.echo(f"Error: {e}")
+            return
 
     # Create session and resume teaching
     typer.echo(f"\nResuming course: {course_name}")
-    session = Session(course_name, verbose=verbose)
+    try:
+        session = Session(course_name, verbose=verbose)
+    except FileNotFoundError as e:
+        typer.echo(f"Error: {e}")
+        typer.echo("Make sure the course workspace exists. Use 'sensei list' to see available courses.")
+        return
+    except Exception as e:
+        typer.echo(f"Error loading course: {e}")
+        if verbose:
+            traceback.print_exc()
+        return
 
     resume_prompt = f"""
 The course '{course_name}' is being resumed.
@@ -353,6 +392,13 @@ def delete_course(course_name: str = typer.Argument(..., help="Name of the cours
     Deletes an existing course and its workspace.
     """
     from sensei.agent.registry import get_skill
+    from sensei.validation import validate_course_name
+
+    try:
+        course_name = validate_course_name(course_name)
+    except ValueError as e:
+        typer.echo(f"Error: {e}")
+        return
 
     delete_skill = get_skill('delete_course')
     try:
@@ -371,6 +417,14 @@ def rename_course(
     Renames an existing course.
     """
     from sensei.agent.registry import get_skill
+    from sensei.validation import validate_course_name
+
+    try:
+        old_name = validate_course_name(old_name)
+        new_name = validate_course_name(new_name)
+    except ValueError as e:
+        typer.echo(f"Error: {e}")
+        return
 
     rename_skill = get_skill('rename_course')
     try:
