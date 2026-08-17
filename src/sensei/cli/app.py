@@ -56,7 +56,7 @@ def connect():
     # Get API key (skip for Ollama which doesn't need one)
     api_key = ""
     if selected_provider.get("auth_header"):
-        api_key = typer.prompt(f"Enter your {selected_provider['name']} API key", hide_input=True)
+        api_key = typer.prompt(f"Enter your {selected_provider['name']} API key")
 
     # Get model selection
     models = selected_provider.get("models", [])
