@@ -103,27 +103,27 @@ def load_course_state(course_name: str) -> Dict[str, Any]:
 
     # Load definition.json
     definition_path = artifacts_dir / "definition.json"
-    with open(definition_path, 'r') as f:
+    with open(definition_path, 'r', encoding='utf-8') as f:
         definition = json.load(f)
 
     # Load state.json
     state_path = artifacts_dir / "state.json"
-    with open(state_path, 'r') as f:
+    with open(state_path, 'r', encoding='utf-8') as f:
         state = json.load(f)
 
     # Load context.md
     context_path = artifacts_dir / "context.md"
-    with open(context_path, 'r') as f:
+    with open(context_path, 'r', encoding='utf-8') as f:
         context = f.read()
 
     # Load notes.md
     notes_path = artifacts_dir / "notes.md"
-    with open(notes_path, 'r') as f:
+    with open(notes_path, 'r', encoding='utf-8') as f:
         notes = f.read()
 
     # Load planner.md
     planner_path = artifacts_dir / "planner.md"
-    with open(planner_path, 'r') as f:
+    with open(planner_path, 'r', encoding='utf-8') as f:
         planner = f.read()
 
     return {

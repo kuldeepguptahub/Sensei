@@ -5,11 +5,45 @@ Provides commands for provider setup, course management, and learning.
 """
 
 import json
-import typer
+import sys
 import traceback
+from pathlib import Path
 from typing import Optional
 
+import typer
+
 app = typer.Typer()
+
+
+def _display(text: str):
+    """
+    Display text to the terminal.
+    Uses Python's built-in pager on Unix, plain echo on Windows.
+    """
+    if not text:
+        return
+    try:
+        import shutil
+        terminal_width = shutil.get_terminal_size((80, 24)).columns
+    except Exception:
+        terminal_width = 80
+
+    # On Windows, just print directly — 'more' is unreliable
+    if sys.platform == "win32":
+        typer.echo(text)
+        return
+
+    # On Unix, use pydoc.pager for long text
+    lines = text.split("\n")
+    if len(lines) > 40:
+        try:
+            import pydoc
+            pydoc.pager(text)
+            return
+        except Exception:
+            pass
+
+    typer.echo(text)
 
 
 @app.command()
@@ -211,7 +245,7 @@ def start_new_course(verbose: bool = typer.Option(False, "--verbose", "-v", help
 
     # Create session for the planning conversation
     try:
-        session = Session(course_name, verbose=verbose)
+        session = Session(course_name, verbose=verbose, mode="new_course")
     except FileNotFoundError as e:
         typer.echo(f"Error loading course: {e}")
         return
@@ -221,23 +255,10 @@ def start_new_course(verbose: bool = typer.Option(False, "--verbose", "-v", help
             traceback.print_exc()
         return
 
-    # Start the planning conversation
-    planning_prompt = f"""
-Create a new course called '{course_name}'.
-
-Follow the planning workflow:
-1. Interview me to understand my goals, topic, desired outcomes, current knowledge, and constraints
-2. Review any uploaded resources in the uploads/ directory
-3. Design a personalized learning roadmap
-4. Create the course artifacts (definition.json and planner.md)
-5. Present the roadmap for my approval using the exact format specified in the instructions
-
-Ask me questions one at a time and wait for my responses.
-"""
-
+    # Start the planning conversation — mode block in system prompt handles the workflow
     try:
-        response = session.send(planning_prompt)
-        typer.echo(response)
+        response = session.send("")
+        _display(response)
     except Exception as e:
         typer.echo(f"\nError: {e}")
         if verbose:
@@ -259,31 +280,14 @@ Ask me questions one at a time and wait for my responses.
                 progress=0.0
             )
 
-            # Clear planning history — the interview is over, start fresh
-            session.clear_history()
-
             typer.echo("\n" + "=" * 60)
             typer.echo("COURSE APPROVED - LET'S BEGIN!".center(60))
             typer.echo("=" * 60)
 
-            # Start the course
-            start_prompt = f"""
-The course '{course_name}' has been approved and is now active.
-
-1. Read definition.json and planner.md using tool calls
-2. Present a course introduction (welcome, overview of modules, how learning works)
-3. Then immediately begin teaching Module 1, Lesson 1 with full content:
-   - Concept explanation
-   - How it works
-   - Code examples with commentary
-   - Key takeaways
-4. Do NOT ask evaluation questions yet — just teach the lesson
-
-Start teaching now.
-"""
+            # Start the course — mode block in system prompt handles the workflow
             try:
-                teaching_response = session.send(start_prompt)
-                typer.echo("\n" + teaching_response)
+                teaching_response = session.send("approve")
+                _display(teaching_response)
             except Exception as e:
                 typer.echo(f"\nError: {e}")
                 if verbose:
@@ -301,7 +305,7 @@ Start teaching now.
 
                 try:
                     response = session.send(user_input)
-                    typer.echo("\n" + response)
+                    _display(response)
                 except Exception as e:
                     typer.echo(f"\nError: {e}")
                     if verbose:
@@ -309,18 +313,9 @@ Start teaching now.
             break
 
         elif user_input.lower() == 'adjust':
-            # Ask for specific adjustments
-            adjust_prompt = f"""
-The learner wants to adjust the roadmap for course '{course_name}'.
-
-1. Ask what specific changes they would like to make
-2. Update the artifacts accordingly
-3. Present the revised roadmap
-4. Ask for approval again
-"""
             try:
-                adjust_response = session.send(adjust_prompt)
-                typer.echo("\n" + adjust_response)
+                adjust_response = session.send("The learner wants to adjust the roadmap. Ask what changes they'd like.")
+                _display(adjust_response)
             except Exception as e:
                 typer.echo(f"\nError: {e}")
                 if verbose:
@@ -329,7 +324,7 @@ The learner wants to adjust the roadmap for course '{course_name}'.
             # Continue the planning conversation
             try:
                 response = session.send(user_input)
-                typer.echo("\n" + response)
+                _display(response)
             except Exception as e:
                 typer.echo(f"\nError: {e}")
                 if verbose:
@@ -394,7 +389,7 @@ def resume(course_name: str = typer.Argument(None, help="Name of the course to r
     # Create session and resume teaching
     typer.echo(f"\nResuming course: {course_name}")
     try:
-        session = Session(course_name, verbose=verbose)
+        session = Session(course_name, verbose=verbose, mode="resume_course")
     except FileNotFoundError as e:
         typer.echo(f"Error: {e}")
         typer.echo("Make sure the course workspace exists. Use 'sensei list' to see available courses.")
@@ -405,26 +400,10 @@ def resume(course_name: str = typer.Argument(None, help="Name of the course to r
             traceback.print_exc()
         return
 
-    resume_prompt = f"""
-The course '{course_name}' is being resumed.
-
-1. Read state.json, planner.md, and definition.json using tool calls
-2. Review what was covered in the previous session (from context.md)
-3. Continue teaching from the current module and lesson with full content:
-   - Concept explanation
-   - How it works
-   - Code examples with commentary
-   - Key takeaways
-4. Do NOT ask evaluation questions yet — just teach the lesson
-
-Start teaching now.
-"""
-    # Clear stale history so the resume prompt is the fresh instruction
-    session.clear_history()
-
+    # Start teaching — mode block in system prompt handles the workflow
     try:
-        response = session.send(resume_prompt)
-        typer.echo("\n" + response)
+        response = session.send("")
+        _display(response)
     except Exception as e:
         typer.echo(f"\nError: {e}")
         if verbose:
@@ -442,7 +421,7 @@ Start teaching now.
 
         try:
             response = session.send(user_input)
-            typer.echo("\n" + response)
+            _display(response)
         except Exception as e:
             typer.echo(f"\nError: {e}")
             if verbose:

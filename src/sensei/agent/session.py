@@ -26,7 +26,8 @@ class Session:
     after each interaction. Compresses history at checkpoints.
     """
 
-    def __init__(self, course_name: str, verbose: bool = False, max_history: int = 10):
+    def __init__(self, course_name: str, verbose: bool = False, max_history: int = 10,
+                 mode: str = "new_course"):
         """
         Initialize a session for a course.
 
@@ -34,10 +35,12 @@ class Session:
             course_name: Name of the course
             verbose: If True, print tool call progress
             max_history: Max messages to keep before compression (default: 10)
+            mode: Session mode — "new_course" or "resume_course"
         """
         self.course_name = course_name
         self.verbose = verbose
         self.max_history = max_history
+        self.mode = mode
         self.history: List[Dict[str, str]] = []
 
         # Load course state
@@ -101,7 +104,8 @@ class Session:
                 prompt=effective_prompt,
                 context=context,
                 verbose=self.verbose,
-                history=self.history
+                history=self.history,
+                mode=self.mode
             )
         except Exception as e:
             self.logger.log_error(str(e), f"During send for course '{self.course_name}'")
