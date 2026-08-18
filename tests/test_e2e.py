@@ -45,20 +45,17 @@ def mock_config():
 # ─── Helper: Build Tool Call Responses ─────────────────────────────────
 
 
-def tool_call_response(tool_name: str, args: dict) -> str:
-    """Build a response that contains a tool call."""
-    lines = [f"name: {tool_name}"]
-    for key, value in args.items():
-        # Ensure multi-line content is on one line
-        clean_value = str(value).replace("\n", "\\n")
-        lines.append(f"{key}: {clean_value}")
-    block = "\n".join(lines)
-    return f"<tool_call>\n{block}\n</tool_call>"
+def tool_call_response(tool_name: str, args: dict) -> dict:
+    """Build a structured tool call response."""
+    return {
+        "type": "tool_calls",
+        "calls": [{"name": tool_name, "args": args}]
+    }
 
 
-def text_response(text: str) -> str:
-    """Build a plain text response (no tool call)."""
-    return text
+def text_response(text: str) -> dict:
+    """Build a structured text response."""
+    return {"type": "text", "content": text}
 
 
 # ─── E2E Test: Full Course Lifecycle ────────────────────────────────────
