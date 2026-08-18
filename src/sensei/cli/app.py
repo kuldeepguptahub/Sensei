@@ -259,6 +259,9 @@ Ask me questions one at a time and wait for my responses.
                 progress=0.0
             )
 
+            # Clear planning history — the interview is over, start fresh
+            session.clear_history()
+
             typer.echo("\n" + "=" * 60)
             typer.echo("COURSE APPROVED - LET'S BEGIN!".center(60))
             typer.echo("=" * 60)
@@ -267,10 +270,14 @@ Ask me questions one at a time and wait for my responses.
             start_prompt = f"""
 The course '{course_name}' has been approved and is now active.
 
-1. Load the course artifacts
-2. Begin teaching from the first module in the roadmap
-3. Follow the teaching philosophy
-4. Create a checkpoint after each milestone
+1. Read definition.json and planner.md using tool calls
+2. Present a course introduction (welcome, overview of modules, how learning works)
+3. Then immediately begin teaching Module 1, Lesson 1 with full content:
+   - Concept explanation
+   - How it works
+   - Code examples with commentary
+   - Key takeaways
+4. Do NOT ask evaluation questions yet — just teach the lesson
 
 Start teaching now.
 """
@@ -281,6 +288,24 @@ Start teaching now.
                 typer.echo(f"\nError: {e}")
                 if verbose:
                     traceback.print_exc()
+
+            # Enter teaching conversation loop
+            while True:
+                try:
+                    user_input = typer.prompt("\nYour response (or 'quit' to exit)")
+                except (EOFError, KeyboardInterrupt):
+                    break
+
+                if user_input.lower() == 'quit':
+                    break
+
+                try:
+                    response = session.send(user_input)
+                    typer.echo("\n" + response)
+                except Exception as e:
+                    typer.echo(f"\nError: {e}")
+                    if verbose:
+                        traceback.print_exc()
             break
 
         elif user_input.lower() == 'adjust':
@@ -383,14 +408,45 @@ def resume(course_name: str = typer.Argument(None, help="Name of the course to r
     resume_prompt = f"""
 The course '{course_name}' is being resumed.
 
-1. Load the current state and continue from where we left off
-2. Review what was covered in the previous session
-3. Continue teaching from the current module and lesson
+1. Read state.json, planner.md, and definition.json using tool calls
+2. Review what was covered in the previous session (from context.md)
+3. Continue teaching from the current module and lesson with full content:
+   - Concept explanation
+   - How it works
+   - Code examples with commentary
+   - Key takeaways
+4. Do NOT ask evaluation questions yet — just teach the lesson
 
 Start teaching now.
 """
-    response = session.send(resume_prompt)
-    typer.echo("\n" + response)
+    # Clear stale history so the resume prompt is the fresh instruction
+    session.clear_history()
+
+    try:
+        response = session.send(resume_prompt)
+        typer.echo("\n" + response)
+    except Exception as e:
+        typer.echo(f"\nError: {e}")
+        if verbose:
+            traceback.print_exc()
+
+    # Enter teaching conversation loop
+    while True:
+        try:
+            user_input = typer.prompt("\nYour response (or 'quit' to exit)")
+        except (EOFError, KeyboardInterrupt):
+            break
+
+        if user_input.lower() == 'quit':
+            break
+
+        try:
+            response = session.send(user_input)
+            typer.echo("\n" + response)
+        except Exception as e:
+            typer.echo(f"\nError: {e}")
+            if verbose:
+                traceback.print_exc()
 
 
 @app.command()

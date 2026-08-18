@@ -15,6 +15,7 @@ from .exceptions import (
     GatewayRateLimitError,
     GatewayResponseError
 )
+from ..logger import log_error
 
 # Hardcoded defaults for now
 DEFAULT_TEMPERATURE = 0.7
@@ -61,39 +62,66 @@ def generate_with_provider(prompt: str) -> str:
                 headers=headers
             )
     except httpx.ConnectError as e:
-        raise GatewayConnectionError(f"Failed to connect to {config.base_url}: {e}")
+        msg = f"Failed to connect to {config.base_url}: {e}"
+        log_error(msg)
+        raise GatewayConnectionError(msg)
     except httpx.TimeoutException as e:
-        raise GatewayConnectionError(f"Request timed out after {DEFAULT_TIMEOUT}s: {e}")
+        msg = f"Request timed out after {DEFAULT_TIMEOUT}s: {e}"
+        log_error(msg)
+        raise GatewayConnectionError(msg)
     except httpx.RequestError as e:
-        raise GatewayConnectionError(f"Request failed: {e}")
+        msg = f"Request failed: {e}"
+        log_error(msg)
+        raise GatewayConnectionError(msg)
 
     # Handle HTTP status codes
     if response.status_code == 401:
-        raise GatewayAuthenticationError(
-            "Invalid API key. Please run 'sensei connect' to update your credentials."
-        )
+        msg = "Invalid API key. Please run 'sensei connect' to update your credentials."
+        log_error(msg, f"Provider: {config.provider_name}")
+        raise GatewayAuthenticationError(msg)
     elif response.status_code == 402:
-        raise GatewayRateLimitError(
+        msg = (
             "Free credits exhausted. Purchase credits at your provider's billing page "
             "or subscribe for higher limits."
         )
+        log_error(msg, f"Provider: {config.provider_name}")
+        raise GatewayRateLimitError(msg)
     elif response.status_code == 429:
-        raise GatewayRateLimitError(
-            "Rate limit exceeded. Please wait a few minutes and try again."
-        )
+        msg = "Rate limit exceeded. Please wait a few minutes and try again."
+        log_error(msg, f"Provider: {config.provider_name}")
+        raise GatewayRateLimitError(msg)
     elif response.status_code >= 500:
-        raise GatewayConnectionError(
+        msg = (
             f"Server error from {config.provider_name} ({response.status_code}). "
             f"Please try again later or use a different provider."
         )
+        log_error(msg)
+        raise GatewayConnectionError(msg)
     elif response.status_code != 200:
-        raise GatewayResponseError(
+        msg = (
             f"Unexpected response from {config.provider_name} ({response.status_code}). "
             f"Please check your configuration with 'sensei current'."
         )
+        log_error(msg)
+        raise GatewayResponseError(msg)
 
     # Parse response
-    return _parse_response(response.json(), config.api_type)
+    data = response.json()
+
+    # Some providers return 200 with error in body
+    if "error" in data:
+        error_code = data["error"].get("code", 0)
+        error_msg = data["error"].get("message", "Unknown error")
+        if error_code == 429:
+            log_error(f"Rate limit (in body): {error_msg}", f"Provider: {config.provider_name}")
+            raise GatewayRateLimitError(f"Rate limit: {error_msg}")
+        elif error_code == 402:
+            log_error(f"Credits exhausted (in body): {error_msg}", f"Provider: {config.provider_name}")
+            raise GatewayRateLimitError(f"Credits exhausted: {error_msg}")
+        log_error(f"API error {error_code}: {error_msg}", f"Provider: {config.provider_name}")
+        raise GatewayResponseError(f"API error ({error_code}): {error_msg}")
+
+    return _parse_response(data, config.api_type)
 
 
 def _build_openai_payload(prompt: str, model_id: str) -> Dict[str, Any]:
@@ -129,7 +157,7 @@ def _parse_response(data: Dict[str, Any], api_type: str) -> str:
             # OpenAI-compatible response format
             choices = data.get("choices", [])
             if choices:
-                return choices[0].get("message", {}).get("content", "")
+                return choices[0].get("message", {}).get("content") or ""
             raise GatewayResponseError("No choices in response")
     except (KeyError, IndexError, TypeError) as e:
         raise GatewayResponseError(f"Failed to parse response: {e}")

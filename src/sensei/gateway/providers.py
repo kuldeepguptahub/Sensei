@@ -92,6 +92,25 @@ PROVIDERS: Dict[str, Dict] = {
             "openai/gpt-oss-120b",
         ]
     },
+    "openrouter": {
+        "name": "OpenRouter",
+        "base_url": "https://openrouter.ai/api/v1",
+        "auth_header": "Authorization",
+        "auth_prefix": "Bearer",
+        "api_type": "openai",
+        "models": [
+            "openai/gpt-oss-20b:free"
+            "openrouter/free",
+            "anthropic/claude-sonnet-4",
+            "anthropic/claude-haiku-4",
+            "openai/gpt-4o",
+            "openai/gpt-4o-mini",
+            "google/gemini-2.5-pro",
+            "google/gemini-2.5-flash",
+            "meta-llama/llama-4-maverick",
+            "deepseek/deepseek-chat-v3",
+        ]
+    },
 }
 
 

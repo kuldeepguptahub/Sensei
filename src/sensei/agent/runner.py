@@ -22,6 +22,7 @@ from .tools import (
     get_tool_schemas_for_prompt,
 )
 from .registry import get_skill
+from ..logger import log_tool, log_error
 
 
 def load_instructions() -> str:
@@ -194,6 +195,12 @@ def run(prompt: str, context: Optional[Dict[str, Any]] = None, verbose: bool = F
             if verbose:
                 print(f"  Result: {'success' if result['success'] else result['error']}")
 
+            log_tool(
+                tool_call["name"],
+                tool_call["args"],
+                "success" if result["success"] else result["error"],
+            )
+
             # Add the response and result to conversation
             conversation.append({
                 "role": "assistant",
@@ -209,10 +216,27 @@ def run(prompt: str, context: Optional[Dict[str, Any]] = None, verbose: bool = F
 
         else:
             # No tool call - this is the final response
-            return response
+            # Guard against empty/whitespace responses
+            if response and response.strip():
+                return response
+            # Empty response after tool loop — ask the agent to continue
+            conversation.append({
+                "role": "assistant",
+                "content": response
+            })
+            conversation.append({
+                "role": "user",
+                "content": (
+                    "Your response was empty. You must produce teaching content for the learner. "
+                    "Continue with the lesson now."
+                )
+            })
+            continue
 
-    # Hit max iterations, return last response
-    return response
+    # Hit max iterations, return last response if non-empty
+    if response and response.strip():
+        return response
+    return "I apologize — I got stuck trying to process that. Could you tell me what you'd like to continue with?"
 
 
 def run_simple(prompt: str) -> str:

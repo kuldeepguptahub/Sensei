@@ -11,6 +11,7 @@ from datetime import datetime
 from .runner import run
 from .context import compress_history, build_resumption_context
 from ..state.manager import load_course_state, save_course_state, update_context
+from ..logger import SessionLogger
 
 
 # Placeholder text in context.md that indicates no real context yet
@@ -53,6 +54,10 @@ class Session:
             and len(self.context.strip()) > len(CONTEXT_PLACEHOLDER.strip())
         )
 
+        # Initialize logger
+        self.logger = SessionLogger(course_name=course_name)
+        self.logger.log_event("session_start", f"Status: {self.state.get('status', 'unknown')}")
+
         # Update last_accessed
         self.state["last_accessed"] = datetime.now().isoformat()
         self._save_state()
@@ -90,12 +95,19 @@ class Session:
         }
 
         # Run the agent with history and context
-        response = run(
-            prompt=effective_prompt,
-            context=context,
-            verbose=self.verbose,
-            history=self.history
-        )
+        self.logger.log_user(user_message)
+        try:
+            response = run(
+                prompt=effective_prompt,
+                context=context,
+                verbose=self.verbose,
+                history=self.history
+            )
+        except Exception as e:
+            self.logger.log_error(str(e), f"During send for course '{self.course_name}'")
+            raise
+
+        self.logger.log_agent(response)
 
         # Add to conversation history
         self.history.append({"role": "user", "content": user_message})
@@ -134,6 +146,11 @@ class Session:
     def _save_state(self) -> None:
         """Persist state to disk."""
         save_course_state(self.course_name, self.state)
+
+    def clear_history(self) -> None:
+        """Clear conversation history for state transitions (e.g., planning → active)."""
+        self.history = []
+        self.has_context = False
 
     def _compress_if_needed(self) -> None:
         """
