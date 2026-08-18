@@ -4,8 +4,9 @@ Gateway provider for Sensei.
 Handles real HTTP communication with LLM providers.
 """
 
+import json
 import httpx
-from typing import Dict, Any
+from typing import Dict, Any, Union
 from .config import load_config
 from .providers import format_auth_header
 from .exceptions import (
@@ -23,7 +24,7 @@ DEFAULT_MAX_TOKENS = 4096
 DEFAULT_TIMEOUT = 120.0
 
 
-def generate_with_provider(prompt: str) -> str:
+def generate_with_provider(prompt: str) -> Dict[str, Any]:
     """
     Generate a response using the configured provider.
 
@@ -31,7 +32,9 @@ def generate_with_provider(prompt: str) -> str:
         prompt: The input prompt to send to the provider
 
     Returns:
-        The generated response text
+        Dict with either:
+          {"type": "text", "content": "..."} for text responses
+          {"type": "tool_calls", "calls": [{"name": "...", "args": {...}}]} for tool calls
 
     Raises:
         GatewayError: For various gateway-related errors
@@ -125,10 +128,13 @@ def generate_with_provider(prompt: str) -> str:
 
 
 def _build_openai_payload(prompt: str, model_id: str) -> Dict[str, Any]:
-    """Build payload for OpenAI-compatible API."""
+    """Build payload for OpenAI-compatible API with native tool support."""
+    from ..agent.tools import get_openai_tool_definitions
+
     return {
         "model": model_id,
         "messages": [{"role": "user", "content": prompt}],
+        "tools": get_openai_tool_definitions(),
         "temperature": DEFAULT_TEMPERATURE,
         "max_tokens": DEFAULT_MAX_TOKENS,
     }
@@ -144,20 +150,54 @@ def _build_anthropic_payload(prompt: str, model_id: str) -> Dict[str, Any]:
     }
 
 
-def _parse_response(data: Dict[str, Any], api_type: str) -> str:
-    """Parse response from LLM provider."""
+def _parse_response(data: Dict[str, Any], api_type: str) -> Dict[str, Any]:
+    """
+    Parse response from LLM provider into structured format.
+
+    Returns:
+        {"type": "text", "content": "..."} for text responses
+        {"type": "tool_calls", "calls": [{"name": "...", "args": {...}}]} for tool calls
+    """
     try:
         if api_type == "anthropic":
             # Anthropic response format
             content = data.get("content", [])
             if content and isinstance(content, list):
-                return content[0].get("text", "")
+                text = content[0].get("text", "")
+                return {"type": "text", "content": text}
             raise GatewayResponseError("Unexpected Anthropic response format")
         else:
             # OpenAI-compatible response format
             choices = data.get("choices", [])
-            if choices:
-                return choices[0].get("message", {}).get("content") or ""
-            raise GatewayResponseError("No choices in response")
+            if not choices:
+                raise GatewayResponseError("No choices in response")
+
+            message = choices[0].get("message", {})
+            if message is None:
+                message = {}
+
+            # Check for native tool calls
+            tool_calls = message.get("tool_calls")
+            if tool_calls:
+                calls = []
+                for tc in tool_calls:
+                    func = tc.get("function", {})
+                    name = func.get("name", "")
+                    raw_args = func.get("arguments", "{}")
+                    # Arguments come as a JSON string, parse them
+                    if isinstance(raw_args, str):
+                        try:
+                            args = json.loads(raw_args)
+                        except json.JSONDecodeError:
+                            args = {}
+                    else:
+                        args = raw_args
+                    calls.append({"name": name, "args": args})
+                return {"type": "tool_calls", "calls": calls}
+
+            # Text response
+            content = message.get("content") or ""
+            return {"type": "text", "content": content}
+
     except (KeyError, IndexError, TypeError) as e:
         raise GatewayResponseError(f"Failed to parse response: {e}")

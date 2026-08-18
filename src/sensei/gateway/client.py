@@ -3,11 +3,12 @@ Gateway client for Sensei.
 
 This is the public entry point for gateway operations.
 """
+from typing import Dict, Any
 from .provider import generate_with_provider
 from .retry import execute_with_retry
 
 
-def generate(prompt: str) -> str:
+def generate(prompt: str) -> Dict[str, Any]:
     """
     Generate a response from the configured gateway.
 
@@ -15,7 +16,9 @@ def generate(prompt: str) -> str:
         prompt: The input prompt to generate a response for
 
     Returns:
-        The generated response text
+        Dict with either:
+          {"type": "text", "content": "..."} for text responses
+          {"type": "tool_calls", "calls": [{"name": "...", "args": {...}}]} for tool calls
 
     Raises:
         GatewayError: For various gateway-related errors
