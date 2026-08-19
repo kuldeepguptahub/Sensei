@@ -12,8 +12,8 @@ This module is responsible for:
 import json
 import time
 from pathlib import Path
-from typing import Dict, Any, Optional
-from ..gateway.client import generate
+from typing import Dict, Any, Optional, Generator
+from ..gateway.client import generate, generate_stream
 from .tools import (
     MAX_TOOL_CALLS,
     MAX_RETRIES,
@@ -428,14 +428,17 @@ def run(prompt: str, context: Optional[Dict[str, Any]] = None, verbose: bool = F
                         and tool_args.get("artifact_name") == "definition.json"):
                     definition_written = True
 
-                # Loop detection: if same tool called 3+ times in last 5 calls, break out
-                tool_call_history.append(tool_name)
+                # Loop detection: if same tool+artifact called 3+ times in last 5 calls, break out
+                # Use tool:artifact key so read_artifact(file_a) and read_artifact(file_b) don't collide
+                artifact_key = tool_args.get("artifact_name", "")
+                call_key = f"{tool_name}:{artifact_key}" if artifact_key else tool_name
+                tool_call_history.append(call_key)
                 recent = tool_call_history[-5:]
-                if recent.count(tool_name) >= 3:
+                if recent.count(call_key) >= 3:
                     conversation.append({
                         "role": "user",
                         "content": (
-                            f"STOP. You have called {tool_name} {recent.count(tool_name)} times in the last "
+                            f"STOP. You have called {tool_name}({artifact_key}) {recent.count(call_key)} times in the last "
                             f"{len(recent)} tool calls. This is a loop. You must STOP calling tools and "
                             "produce a text response for the learner RIGHT NOW. "
                             "If you need to teach, just teach — do not read or write any more files. "
@@ -477,6 +480,135 @@ def run(prompt: str, context: Optional[Dict[str, Any]] = None, verbose: bool = F
     if "response" in dir() and isinstance(result, dict) and result.get("content"):
         return result["content"]
     return "I apologize — I got stuck trying to process that. Could you tell me what you'd like to continue with?"
+
+
+def run_stream(prompt: str, context: Optional[Dict[str, Any]] = None, verbose: bool = False,
+               history: Optional[list] = None, mode: str = "new_course") -> Generator[str, None, None]:
+    """
+    Run the Sensei agent with streaming responses.
+
+    Same logic as run(), but yields text chunks for streaming display.
+    Tool calls are executed synchronously; only the final text is streamed.
+
+    Args:
+        prompt: The user prompt to process
+        context: Optional context data for the agent
+        verbose: If True, print tool call progress
+        history: Optional list of prior conversation messages
+        mode: Session mode — "new_course" or "resume_course"
+
+    Yields:
+        Text chunks from the agent's response
+    """
+    instructions = load_instructions()
+    tool_schemas = get_tool_schemas_for_prompt()
+    mode_block = _get_mode_block(mode, context)
+    system_prompt = f"{instructions}\n\n{tool_schemas}\n\n{mode_block}"
+
+    conversation = [{"role": "system", "content": system_prompt}]
+
+    if history:
+        conversation.extend(history)
+
+    conversation.append({"role": "user", "content": prompt})
+
+    if context:
+        conversation.append({"role": "user", "content": f"Context: {context}"})
+
+    tool_call_history = []
+    interview_answer_count = 0
+    definition_written = False
+    interview_guard = (mode == "new_course" and not prompt.strip())
+
+    for iteration in range(MAX_TOOL_CALLS):
+        full_prompt = "\n\n".join([msg["content"] for msg in conversation])
+
+        # Stream the response
+        text_buffer = ""
+        tool_calls = None
+
+        for chunk in generate_stream(full_prompt):
+            if chunk["type"] == "text":
+                text_buffer += chunk["content"]
+                yield chunk["content"]
+            elif chunk["type"] == "tool_calls":
+                tool_calls = chunk["calls"]
+
+        # If we got tool calls, execute them (text was already yielded above for any partial text)
+        if tool_calls:
+            # Add the accumulated text to conversation if any
+            if text_buffer:
+                conversation.append({"role": "assistant", "content": text_buffer})
+
+            for call in tool_calls:
+                tool_name = call["name"]
+                tool_args = call["args"]
+
+                # Interview guard
+                if (interview_guard
+                        and tool_name == "write_artifact"
+                        and not definition_written
+                        and interview_answer_count < 4):
+                    interview_answer_count += 1
+                    blocked_msg = (
+                        f"BLOCKED: You cannot write any files during the interview. "
+                        f"You have collected {interview_answer_count}/4 answers. "
+                        f"Ask the next interview question."
+                    )
+                    conversation.append({"role": "user", "content": blocked_msg})
+                    break
+
+                if (mode == "new_course"
+                        and tool_name == "write_artifact"
+                        and tool_args.get("artifact_name") == "definition.json"):
+                    definition_written = True
+
+                # Loop detection — track tool:artifact, not just tool
+                artifact_key = tool_args.get("artifact_name", "")
+                call_key = f"{tool_name}:{artifact_key}" if artifact_key else tool_name
+                tool_call_history.append(call_key)
+                recent = tool_call_history[-5:]
+                if recent.count(call_key) >= 3:
+                    loop_msg = (
+                        f"STOP. You have called {tool_name}({artifact_key}) {recent.count(call_key)} times. "
+                        "Produce a text response for the learner RIGHT NOW."
+                    )
+                    conversation.append({"role": "user", "content": loop_msg})
+                    tool_call_history.clear()
+                    break
+
+                if verbose:
+                    print(f"  Calling {tool_name}...")
+
+                tool_result = execute_tool(tool_name, tool_args)
+
+                if verbose:
+                    print(f"  Result: {'success' if tool_result['success'] else tool_result['error']}")
+
+                log_tool(tool_name, tool_args, "success" if tool_result["success"] else tool_result["error"])
+
+                conversation.append({"role": "assistant", "content": f"Called tool: {tool_name}"})
+                conversation.append({
+                    "role": "user",
+                    "content": format_tool_result(tool_name, tool_args, tool_result, mode=mode)
+                })
+
+            continue
+
+        # No tool calls — text was already yielded. Check if we need to continue.
+        if text_buffer and text_buffer.strip():
+            # Got a complete text response, done
+            return
+
+        # Empty text — nudge the model
+        conversation.append({"role": "assistant", "content": text_buffer})
+        conversation.append({
+            "role": "user",
+            "content": "Your response was empty. Produce teaching content for the learner."
+        })
+        continue
+
+    yield "\n\nI apologize — I got stuck. Could you tell me what you'd like to continue with?"
 
 
 def run_simple(prompt: str) -> str:

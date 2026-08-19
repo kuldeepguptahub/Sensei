@@ -46,6 +46,23 @@ def _display(text: str):
     typer.echo(text)
 
 
+def _display_stream(stream_generator):
+    """
+    Display streaming text from a generator, printing tokens as they arrive.
+
+    Args:
+        stream_generator: Generator yielding text chunks
+    """
+    first = True
+    for chunk in stream_generator:
+        if first:
+            first = False
+        sys.stdout.write(chunk)
+        sys.stdout.flush()
+    sys.stdout.write("\n")
+    sys.stdout.flush()
+
+
 @app.command()
 def help():
     """
@@ -257,8 +274,7 @@ def start_new_course(verbose: bool = typer.Option(False, "--verbose", "-v", help
 
     # Start the planning conversation — mode block in system prompt handles the workflow
     try:
-        response = session.send("")
-        _display(response)
+        _display_stream(session.send_stream(""))
     except Exception as e:
         typer.echo(f"\nError: {e}")
         if verbose:
@@ -286,8 +302,7 @@ def start_new_course(verbose: bool = typer.Option(False, "--verbose", "-v", help
 
             # Start the course — mode block in system prompt handles the workflow
             try:
-                teaching_response = session.send("approve")
-                _display(teaching_response)
+                _display_stream(session.send_stream("approve"))
             except Exception as e:
                 typer.echo(f"\nError: {e}")
                 if verbose:
@@ -304,8 +319,7 @@ def start_new_course(verbose: bool = typer.Option(False, "--verbose", "-v", help
                     break
 
                 try:
-                    response = session.send(user_input)
-                    _display(response)
+                    _display_stream(session.send_stream(user_input))
                 except Exception as e:
                     typer.echo(f"\nError: {e}")
                     if verbose:
@@ -314,8 +328,7 @@ def start_new_course(verbose: bool = typer.Option(False, "--verbose", "-v", help
 
         elif user_input.lower() == 'adjust':
             try:
-                adjust_response = session.send("The learner wants to adjust the roadmap. Ask what changes they'd like.")
-                _display(adjust_response)
+                _display_stream(session.send_stream("The learner wants to adjust the roadmap. Ask what changes they'd like."))
             except Exception as e:
                 typer.echo(f"\nError: {e}")
                 if verbose:
@@ -323,8 +336,7 @@ def start_new_course(verbose: bool = typer.Option(False, "--verbose", "-v", help
         else:
             # Continue the planning conversation
             try:
-                response = session.send(user_input)
-                _display(response)
+                _display_stream(session.send_stream(user_input))
             except Exception as e:
                 typer.echo(f"\nError: {e}")
                 if verbose:
@@ -402,8 +414,7 @@ def resume(course_name: str = typer.Argument(None, help="Name of the course to r
 
     # Start teaching — mode block in system prompt handles the workflow
     try:
-        response = session.send("")
-        _display(response)
+        _display_stream(session.send_stream(""))
     except Exception as e:
         typer.echo(f"\nError: {e}")
         if verbose:
@@ -420,8 +431,7 @@ def resume(course_name: str = typer.Argument(None, help="Name of the course to r
             break
 
         try:
-            response = session.send(user_input)
-            _display(response)
+            _display_stream(session.send_stream(user_input))
         except Exception as e:
             typer.echo(f"\nError: {e}")
             if verbose:

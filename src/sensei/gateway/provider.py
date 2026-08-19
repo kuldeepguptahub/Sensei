@@ -6,7 +6,7 @@ Handles real HTTP communication with LLM providers.
 
 import json
 import httpx
-from typing import Dict, Any, Union
+from typing import Dict, Any, Union, Generator
 from .config import load_config
 from .providers import format_auth_header
 from .exceptions import (
@@ -125,6 +125,138 @@ def generate_with_provider(prompt: str) -> Dict[str, Any]:
         raise GatewayResponseError(f"API error ({error_code}): {error_msg}")
 
     return _parse_response(data, config.api_type)
+
+
+def generate_with_provider_stream(prompt: str) -> Generator[Dict[str, Any], None, None]:
+    """
+    Generate a streaming response using the configured provider.
+
+    Yields chunks as they arrive:
+      {"type": "text", "content": "..."} for text chunks
+      {"type": "tool_calls", "calls": [...]} for tool calls (accumulated, single yield)
+
+    Args:
+        prompt: The input prompt to send to the provider
+
+    Yields:
+        Dict chunks with type "text" or "tool_calls"
+
+    Raises:
+        GatewayError: For various gateway-related errors
+    """
+    config = load_config()
+
+    headers = format_auth_header(
+        {"auth_header": config.auth_header, "auth_prefix": config.auth_prefix},
+        config.api_key
+    )
+
+    endpoint = f"{config.base_url}/chat/completions"
+
+    if config.api_type == "anthropic":
+        payload = _build_anthropic_payload(prompt, config.model_id)
+    else:
+        payload = _build_openai_payload(prompt, config.model_id)
+
+    # Add stream flag for OpenAI-compatible APIs
+    if config.api_type != "anthropic":
+        payload["stream"] = True
+
+    try:
+        with httpx.Client(timeout=DEFAULT_TIMEOUT) as client:
+            with client.stream("POST", endpoint, json=payload, headers=headers) as response:
+                # Handle HTTP errors before reading stream
+                if response.status_code == 401:
+                    msg = "Invalid API key. Please run 'sensei connect' to update your credentials."
+                    log_error(msg, f"Provider: {config.provider_name}")
+                    raise GatewayAuthenticationError(msg)
+                elif response.status_code == 402:
+                    msg = "Free credits exhausted. Purchase credits at your provider's billing page."
+                    log_error(msg, f"Provider: {config.provider_name}")
+                    raise GatewayRateLimitError(msg)
+                elif response.status_code == 429:
+                    msg = "Rate limit exceeded. Please wait a few minutes and try again."
+                    log_error(msg, f"Provider: {config.provider_name}")
+                    raise GatewayRateLimitError(msg)
+                elif response.status_code >= 500:
+                    msg = f"Server error from {config.provider_name} ({response.status_code})."
+                    log_error(msg)
+                    raise GatewayConnectionError(msg)
+                elif response.status_code != 200:
+                    msg = f"Unexpected response from {config.provider_name} ({response.status_code})."
+                    log_error(msg)
+                    raise GatewayResponseError(msg)
+
+                # Parse SSE stream
+                tool_call_accumulator = {}  # index -> {id, name, arguments_json}
+                text_buffer = ""
+
+                for line in response.iter_lines():
+                    if not line:
+                        continue
+                    if not line.startswith("data: "):
+                        continue
+                    data_str = line[6:]
+                    if data_str.strip() == "[DONE]":
+                        break
+
+                    try:
+                        chunk = json.loads(data_str)
+                    except json.JSONDecodeError:
+                        continue
+
+                    choices = chunk.get("choices", [])
+                    if not choices:
+                        continue
+
+                    delta = choices[0].get("delta", {})
+                    finish_reason = choices[0].get("finish_reason")
+
+                    # Accumulate tool calls
+                    if "tool_calls" in delta:
+                        for tc_delta in delta["tool_calls"]:
+                            idx = tc_delta.get("index", 0)
+                            if idx not in tool_call_accumulator:
+                                tool_call_accumulator[idx] = {
+                                    "id": tc_delta.get("id", ""),
+                                    "name": "",
+                                    "arguments": ""
+                                }
+                            if "function" in tc_delta:
+                                if "name" in tc_delta["function"]:
+                                    tool_call_accumulator[idx]["name"] = tc_delta["function"]["name"]
+                                if "arguments" in tc_delta["function"]:
+                                    tool_call_accumulator[idx]["arguments"] += tc_delta["function"]["arguments"]
+
+                    # Yield text content chunks
+                    if "content" in delta and delta["content"]:
+                        text_buffer += delta["content"]
+                        yield {"type": "text", "content": delta["content"]}
+
+                    # On finish, yield tool calls if any
+                    if finish_reason == "tool_calls" and tool_call_accumulator:
+                        calls = []
+                        for idx in sorted(tool_call_accumulator.keys()):
+                            tc = tool_call_accumulator[idx]
+                            try:
+                                args = json.loads(tc["arguments"]) if tc["arguments"] else {}
+                            except json.JSONDecodeError:
+                                args = {}
+                            calls.append({"name": tc["name"], "args": args})
+                        yield {"type": "tool_calls", "calls": calls}
+
+    except httpx.ConnectError as e:
+        msg = f"Failed to connect to {config.base_url}: {e}"
+        log_error(msg)
+        raise GatewayConnectionError(msg)
+    except httpx.TimeoutException as e:
+        msg = f"Request timed out: {e}"
+        log_error(msg)
+        raise GatewayConnectionError(msg)
+    except httpx.RequestError as e:
+        msg = f"Request failed: {e}"
+        log_error(msg)
+        raise GatewayConnectionError(msg)
 
 
 def _build_openai_payload(prompt: str, model_id: str) -> Dict[str, Any]:
