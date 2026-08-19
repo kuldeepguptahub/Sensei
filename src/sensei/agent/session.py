@@ -97,6 +97,10 @@ class Session:
             "competency": self.state.get("competency_index", {})
         }
 
+        # Track if agent called update_state during this turn
+        original_module = self.state.get("current_module", 0)
+        original_lesson = self.state.get("current_lesson", 0)
+
         # Run the agent with history and context
         self.logger.log_user(user_message)
         try:
@@ -111,11 +115,21 @@ class Session:
             self.logger.log_error(str(e), f"During send for course '{self.course_name}'")
             raise
 
+        # Check if agent called update_state (state would have changed)
+        state_was_updated = (
+            self.state.get("current_module", 0) != original_module
+            or self.state.get("current_lesson", 0) != original_lesson
+        )
+
         self.logger.log_agent(response)
 
         # Add to conversation history
         self.history.append({"role": "user", "content": user_message})
         self.history.append({"role": "assistant", "content": response})
+
+        # Auto-advance lesson if agent taught but didn't update state
+        if not state_was_updated and self._looks_like_teaching(response):
+            self._auto_advance_lesson()
 
         # Update last timestamps
         now = datetime.now().isoformat()
@@ -160,6 +174,11 @@ class Session:
 
         self.logger.log_user(user_message)
 
+        # Track if agent called update_state during this turn
+        state_was_updated = False
+        original_module = self.state.get("current_module", 0)
+        original_lesson = self.state.get("current_lesson", 0)
+
         # Accumulate the full response for history
         full_response = ""
         try:
@@ -176,11 +195,21 @@ class Session:
             self.logger.log_error(str(e), f"During send_stream for course '{self.course_name}'")
             raise
 
+        # Check if agent called update_state (state would have changed)
+        state_was_updated = (
+            self.state.get("current_module", 0) != original_module
+            or self.state.get("current_lesson", 0) != original_lesson
+        )
+
         self.logger.log_agent(full_response)
 
         # Add to conversation history
         self.history.append({"role": "user", "content": user_message})
         self.history.append({"role": "assistant", "content": full_response})
+
+        # Auto-advance lesson if agent taught but didn't update state
+        if not state_was_updated and self._looks_like_teaching(full_response):
+            self._auto_advance_lesson()
 
         # Update last timestamps
         now = datetime.now().isoformat()
@@ -212,6 +241,42 @@ class Session:
     def _save_state(self) -> None:
         """Persist state to disk."""
         save_course_state(self.course_name, self.state)
+
+    def _looks_like_teaching(self, text: str) -> bool:
+        """
+        Check if response text looks like teaching content.
+
+        Args:
+            text: The agent's response text
+
+        Returns:
+            True if it looks like a lesson was taught
+        """
+        if not text or len(text) < 100:
+            return False
+        indicators = ["##", "```", "lesson", "module", "concept", "example", "key take"]
+        text_lower = text.lower()
+        return any(ind in text_lower for ind in indicators)
+
+    def _auto_advance_lesson(self) -> None:
+        """
+        Auto-advance the lesson counter when teaching content was delivered
+        but the agent forgot to call update_state.
+
+        This is a safety net to ensure progress tracking works even when
+        the agent doesn't follow instructions to call update_state.
+        """
+        current_module = self.state.get("current_module", 0)
+        current_lesson = self.state.get("current_lesson", 0)
+
+        # Simple heuristic: increment lesson by 1
+        # The agent should be calling update_state for proper tracking,
+        # but this ensures progress doesn't get stuck.
+        self.state["current_lesson"] = current_lesson + 1
+        self.state["progress"] = min(1.0, self.state.get("progress", 0.0) + 0.1)
+
+        if self.verbose:
+            print(f"  [Auto-advanced: module {current_module}, lesson {current_lesson} -> {current_lesson + 1}]")
 
     def clear_history(self) -> None:
         """Clear conversation history for state transitions (e.g., planning → active)."""

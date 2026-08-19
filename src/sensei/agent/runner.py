@@ -382,34 +382,6 @@ def run(prompt: str, context: Optional[Dict[str, Any]] = None, verbose: bool = F
             # Final text response — no tool calls
             content = result["content"]
             if content and content.strip():
-                # Check if this looks like teaching content that needs state update
-                looks_like_teaching = (
-                    "##" in content
-                    or "```" in content
-                    or "lesson" in content.lower()
-                    or "module" in content.lower()
-                    or len(content) > 200
-                )
-
-                # Check if we already have a pending state update in this iteration
-                has_pending_update = any(
-                    msg.get("content", "").startswith("Called tool: update_state")
-                    for msg in conversation[-5:]
-                )
-
-                # If it looks like teaching and no state update was called, nudge the model
-                if looks_like_teaching and not has_pending_update:
-                    conversation.append({"role": "assistant", "content": content})
-                    conversation.append({
-                        "role": "user",
-                        "content": (
-                            "Good teaching content. Now you MUST call update_state to record progress. "
-                            "Update current_lesson, progress, last_accessed, and last_updated. "
-                            "This is required after every lesson."
-                        )
-                    })
-                    continue
-
                 return content
             # Empty text after tool loop — nudge the model
             conversation.append({"role": "assistant", "content": content})
@@ -630,36 +602,8 @@ def run_stream(prompt: str, context: Optional[Dict[str, Any]] = None, verbose: b
 
         # No tool calls — text was already yielded. Check if we need to continue.
         if text_buffer and text_buffer.strip():
-            # Check if this looks like teaching content that needs state update
-            # Teaching content typically contains lesson headers, code blocks, or explanations
-            looks_like_teaching = (
-                "##" in text_buffer
-                or "```" in text_buffer
-                or "lesson" in text_buffer.lower()
-                or "module" in text_buffer.lower()
-                or len(text_buffer) > 200
-            )
-
-            # Check if we already have a pending state update in this iteration
-            has_pending_update = any(
-                msg.get("content", "").startswith("Called tool: update_state")
-                for msg in conversation[-5:]
-            )
-
-            # If it looks like teaching and no state update was called, nudge the model
-            if looks_like_teaching and not has_pending_update:
-                conversation.append({"role": "assistant", "content": text_buffer})
-                conversation.append({
-                    "role": "user",
-                    "content": (
-                        "Good teaching content. Now you MUST call update_state to record progress. "
-                        "Update current_lesson, progress, last_accessed, and last_updated. "
-                        "This is required after every lesson."
-                    )
-                })
-                continue
-
             # Got a complete text response, done
+            # State auto-advance is handled by Session._auto_advance_lesson()
             return
 
         # Empty text — nudge the model
