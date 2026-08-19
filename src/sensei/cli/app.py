@@ -526,5 +526,25 @@ def reset():
     typer.echo("Config reset. Run 'sensei connect' to set up a new provider.")
 
 
+@app.command()
+def ui(port: int = typer.Option(8501, "--port", "-p", help="Port for the Streamlit server")):
+    """
+    Launch the Sensei web dashboard (Streamlit).
+    """
+    import subprocess
+    import sys as _sys
+    app_path = Path(__file__).parent.parent / "ui" / "app.py"
+    if not app_path.exists():
+        typer.echo(f"Error: UI app not found at {app_path}")
+        return
+    typer.echo(f"Starting Sensei UI on http://localhost:{port}")
+    subprocess.run([
+        _sys.executable, "-m", "streamlit", "run",
+        str(app_path),
+        "--server.port", str(port),
+        "--server.headless", "true",
+    ])
+
+
 if __name__ == "__main__":
     app()
