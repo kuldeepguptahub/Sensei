@@ -69,7 +69,7 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def format_tool_result(tool_name: str, tool_args: Dict[str, Any], result: Dict[str, Any],
-                       mode: str = "new_course") -> str:
+                       mode: str = "new_course", context: Optional[Dict[str, Any]] = None) -> str:
     """
     Format a tool execution result for the conversation.
 
@@ -80,6 +80,7 @@ def format_tool_result(tool_name: str, tool_args: Dict[str, Any], result: Dict[s
         tool_args: Arguments passed to the tool
         result: The tool execution result dict
         mode: Session mode — "new_course" or "resume_course"
+        context: Current course context with current_module, current_lesson, progress
 
     Returns:
         Formatted string for the conversation
@@ -99,7 +100,7 @@ def format_tool_result(tool_name: str, tool_args: Dict[str, Any], result: Dict[s
     base += "\n</tool_result>"
 
     # Add next-step hints based on what the tool just did
-    hint = _next_step_hint(tool_name, tool_args, mode)
+    hint = _next_step_hint(tool_name, tool_args, mode, context)
     if hint:
         base += f"\n\n{hint}"
 
@@ -131,7 +132,8 @@ def _error_hint(tool_name: str, args: Dict[str, Any], error: str) -> str:
     return ""
 
 
-def _next_step_hint(tool_name: str, args: Dict[str, Any], mode: str = "new_course") -> str:
+def _next_step_hint(tool_name: str, args: Dict[str, Any], mode: str = "new_course",
+                    context: Optional[Dict[str, Any]] = None) -> str:
     """
     Return a hint about what to do next after a successful tool call.
 
@@ -142,11 +144,15 @@ def _next_step_hint(tool_name: str, args: Dict[str, Any], mode: str = "new_cours
         tool_name: Name of the tool that was called
         args: Arguments passed to the tool
         mode: Session mode — "new_course" or "resume_course"
+        context: Current course context with current_module, current_lesson, progress
 
     Returns:
         Hint string, or empty string if no hint needed
     """
     artifact = args.get("artifact_name", "")
+    curr_module = context.get("current_module", 0) if context else 0
+    curr_lesson = context.get("current_lesson", 0) if context else 0
+    curr_progress = context.get("progress", 0.0) if context else 0.0
 
     if tool_name == "write_artifact":
         if artifact == "definition.json":
@@ -178,41 +184,82 @@ def _next_step_hint(tool_name: str, args: Dict[str, Any], mode: str = "new_cours
         elif artifact == "state.json":
             if mode == "resume_course":
                 return (
-                    "You have the current progress. Now READ planner.md, definition.json, "
-                    "and context.md to understand what was covered. Then resume teaching. "
-                    "IMPORTANT: After teaching each lesson, you MUST call update_state to advance the lesson."
+                    f"Current progress: module {curr_module}, lesson {curr_lesson}, progress {curr_progress:.0%}. "
+                    f"Now READ planner.md, definition.json, and context.md to understand what was covered. "
+                    f"Then resume teaching from Module {curr_module}, Lesson {curr_lesson + 1}. "
+                    f"After teaching, call update_state to advance to lesson {curr_lesson + 2}."
                 )
             return (
-                "You have the current progress. Continue from where the learner left off. "
-                "IMPORTANT: After teaching each lesson, you MUST call update_state to advance the lesson."
+                f"Current progress: module {curr_module}, lesson {curr_lesson}, progress {curr_progress:.0%}. "
+                f"Continue from where the learner left off. "
+                f"After teaching, call update_state to advance to lesson {curr_lesson + 1}."
             )
         elif artifact == "context.md":
+            next_lesson = curr_lesson + 1
+            next_progress = min(1.0, curr_progress + 0.1)
             return (
-                "You have the session context. NOW teach the current lesson. "
-                "Do NOT read or write any more artifacts. Just teach the lesson content. "
-                "IMPORTANT: After teaching, you MUST call update_state to advance progress."
+                f"You have the session context. NOW teach Module {curr_module}, Lesson {curr_lesson + 1}. "
+                f"Do NOT read or write any more artifacts. Just teach the lesson content. "
+                f"After teaching, when the learner wants to continue, call update_state with: "
+                f"current_module={curr_module}, current_lesson={next_lesson}, "
+                f"progress={next_progress:.2f}, status='active'. "
+                f"NEVER reset current_lesson to 0."
             )
         else:
             return f"You have {artifact}. Continue with your task."
 
     elif tool_name == "update_state":
-        # Check what status was set
-        state_json = args.get("state_json", "")
-        if '"active"' in state_json:
+        # Parse the state_json to validate
+        import json as _json
+        try:
+            new_state = _json.loads(args.get("state_json", "{}"))
+        except Exception:
+            new_state = {}
+
+        new_module = new_state.get("current_module", -1)
+        new_lesson = new_state.get("current_lesson", -1)
+        new_status = new_state.get("status", "")
+        new_progress = new_state.get("progress", -1)
+
+        # Validate: lesson should increment, not reset to 0
+        if new_lesson == 0 and curr_lesson > 0:
+            return (
+                f"ERROR: You set current_lesson to 0 but it was already {curr_lesson}. "
+                f"Increment it to {curr_lesson + 1}. "
+                f"NEVER reset current_lesson to 0 unless advancing to a new module. "
+                f"Required: current_module={curr_module}, current_lesson={curr_lesson + 1}, "
+                f"progress={min(1.0, curr_progress + 0.1):.2f}"
+            )
+
+        # Validate: lesson should match expected next lesson
+        if new_lesson != -1 and new_lesson != curr_lesson + 1 and curr_lesson > 0:
+            return (
+                f"WARNING: You set current_lesson to {new_lesson} but expected {curr_lesson + 1}. "
+                f"Current state: module {curr_module}, lesson {curr_lesson}. "
+                f"Set current_lesson to {curr_lesson + 1} to advance correctly."
+            )
+
+        if new_status == "active" and curr_lesson == 0:
             return (
                 "Status is now ACTIVE. You MUST teach Module 1, Lesson 1 NOW. "
                 "Read planner.md to know what the lesson is, then deliver the full lesson content "
                 "(concept explanation, how it works, code examples, key takeaways). "
-                "Do NOT ask questions. Just teach."
+                "Do NOT ask questions. Just teach. "
+                "After teaching, wait for the learner's response."
             )
-        elif '"completed"' in state_json:
+        elif new_status == "completed":
             return "Course is complete! Congratulate the learner."
-        # If the update failed due to missing fields, tell the model what's required
+        elif new_status == "active":
+            return (
+                f"State updated: module {new_module}, lesson {new_lesson}, progress {new_progress:.0%}. "
+                f"Good. Now teach the next lesson or wait for the learner's question. "
+                f"Remember: after teaching, call update_state to advance to lesson {new_lesson + 1}."
+            )
+
         return (
             "State updated. Required fields: current_module (int), current_lesson (int), "
-            "progress (float 0-1), status (string: 'planning', 'active', 'paused', or 'completed'), "
-            "last_accessed (ISO timestamp), last_updated (ISO timestamp). "
-            "Always include ALL required fields when calling update_state."
+            "progress (float 0-1), status (string), last_accessed (ISO), last_updated (ISO). "
+            "IMPORTANT: current_lesson must be incremented by 1, never reset to 0."
         )
 
     elif tool_name == "create_workspace":
@@ -475,7 +522,7 @@ def run(prompt: str, context: Optional[Dict[str, Any]] = None, verbose: bool = F
                 })
                 conversation.append({
                     "role": "user",
-                    "content": format_tool_result(tool_name, tool_args, tool_result, mode=mode)
+                    "content": format_tool_result(tool_name, tool_args, tool_result, mode=mode, context=context)
                 })
 
             # Continue loop — model should now produce text or more tool calls
@@ -595,7 +642,7 @@ def run_stream(prompt: str, context: Optional[Dict[str, Any]] = None, verbose: b
                 conversation.append({"role": "assistant", "content": f"Called tool: {tool_name}"})
                 conversation.append({
                     "role": "user",
-                    "content": format_tool_result(tool_name, tool_args, tool_result, mode=mode)
+                    "content": format_tool_result(tool_name, tool_args, tool_result, mode=mode, context=context)
                 })
 
             continue

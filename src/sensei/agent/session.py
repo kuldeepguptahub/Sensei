@@ -120,10 +120,6 @@ class Session:
         self.history.append({"role": "user", "content": user_message})
         self.history.append({"role": "assistant", "content": response})
 
-        # Always auto-advance when teaching content is delivered
-        if self._looks_like_teaching(response):
-            self._auto_advance_lesson()
-
         # Update last timestamps
         now = datetime.now().isoformat()
         self.state["last_accessed"] = now
@@ -192,12 +188,6 @@ class Session:
         self.history.append({"role": "user", "content": user_message})
         self.history.append({"role": "assistant", "content": full_response})
 
-        # Always auto-advance when teaching content is delivered.
-        # The agent's update_state is unreliable (it resets current_lesson to 0).
-        # We override whatever the agent set and advance to the next lesson.
-        if self._looks_like_teaching(full_response):
-            self._auto_advance_lesson()
-
         # Update last timestamps
         now = datetime.now().isoformat()
         self.state["last_accessed"] = now
@@ -236,42 +226,6 @@ class Session:
             import json
             with open(state_path, 'r', encoding='utf-8') as f:
                 self.state = json.load(f)
-
-    def _looks_like_teaching(self, text: str) -> bool:
-        """
-        Check if response text looks like teaching content.
-
-        Args:
-            text: The agent's response text
-
-        Returns:
-            True if it looks like a lesson was taught
-        """
-        if not text or len(text) < 100:
-            return False
-        indicators = ["##", "```", "lesson", "module", "concept", "example", "key take"]
-        text_lower = text.lower()
-        return any(ind in text_lower for ind in indicators)
-
-    def _auto_advance_lesson(self) -> None:
-        """
-        Auto-advance the lesson counter when teaching content was delivered
-        but the agent forgot to call update_state.
-
-        This is a safety net to ensure progress tracking works even when
-        the agent doesn't follow instructions to call update_state.
-        """
-        current_module = self.state.get("current_module", 0)
-        current_lesson = self.state.get("current_lesson", 0)
-
-        # Simple heuristic: increment lesson by 1
-        # The agent should be calling update_state for proper tracking,
-        # but this ensures progress doesn't get stuck.
-        self.state["current_lesson"] = current_lesson + 1
-        self.state["progress"] = min(1.0, self.state.get("progress", 0.0) + 0.1)
-
-        if self.verbose:
-            print(f"  [Auto-advanced: module {current_module}, lesson {current_lesson} -> {current_lesson + 1}]")
 
     def clear_history(self) -> None:
         """Clear conversation history for state transitions (e.g., planning → active)."""
