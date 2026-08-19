@@ -97,9 +97,6 @@ class Session:
             "competency": self.state.get("competency_index", {})
         }
 
-        # Track if agent called update_state during this turn
-        state_before = self.state.copy()
-
         # Run the agent with history and context
         self.logger.log_user(user_message)
         try:
@@ -114,14 +111,8 @@ class Session:
             self.logger.log_error(str(e), f"During send for course '{self.course_name}'")
             raise
 
-        # Reload state from disk — agent may have called update_state which writes directly to file
+        # Reload state from disk — agent may have called update_state
         self._reload_state()
-
-        # Check if agent called update_state (state on disk changed)
-        state_was_updated = (
-            self.state.get("current_module", 0) != state_before.get("current_module", 0)
-            or self.state.get("current_lesson", 0) != state_before.get("current_lesson", 0)
-        )
 
         self.logger.log_agent(response)
 
@@ -129,8 +120,8 @@ class Session:
         self.history.append({"role": "user", "content": user_message})
         self.history.append({"role": "assistant", "content": response})
 
-        # Auto-advance lesson if agent taught but didn't update state
-        if not state_was_updated and self._looks_like_teaching(response):
+        # Always auto-advance when teaching content is delivered
+        if self._looks_like_teaching(response):
             self._auto_advance_lesson()
 
         # Update last timestamps
@@ -176,9 +167,6 @@ class Session:
 
         self.logger.log_user(user_message)
 
-        # Track if agent called update_state during this turn
-        state_before = self.state.copy()
-
         # Accumulate the full response for history
         full_response = ""
         try:
@@ -195,14 +183,8 @@ class Session:
             self.logger.log_error(str(e), f"During send_stream for course '{self.course_name}'")
             raise
 
-        # Reload state from disk — agent may have called update_state which writes directly to file
+        # Reload state from disk — agent may have called update_state
         self._reload_state()
-
-        # Check if agent called update_state (state on disk changed)
-        state_was_updated = (
-            self.state.get("current_module", 0) != state_before.get("current_module", 0)
-            or self.state.get("current_lesson", 0) != state_before.get("current_lesson", 0)
-        )
 
         self.logger.log_agent(full_response)
 
@@ -210,8 +192,10 @@ class Session:
         self.history.append({"role": "user", "content": user_message})
         self.history.append({"role": "assistant", "content": full_response})
 
-        # Auto-advance lesson if agent taught but didn't update state
-        if not state_was_updated and self._looks_like_teaching(full_response):
+        # Always auto-advance when teaching content is delivered.
+        # The agent's update_state is unreliable (it resets current_lesson to 0).
+        # We override whatever the agent set and advance to the next lesson.
+        if self._looks_like_teaching(full_response):
             self._auto_advance_lesson()
 
         # Update last timestamps
