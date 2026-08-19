@@ -116,24 +116,6 @@ if st.session_state.selected_course:
         mode=st.session_state.mode,
     )
 else:
-    # Home / welcome page
-    st.title("🎓 Welcome to Sensei")
-    st.markdown(
-        "Your personalized learning companion. Select a course from the sidebar "
-        "to continue, or create a new one to get started."
-    )
-
-    if courses:
-        st.subheader("Your Courses")
-        cols = st.columns(min(len(courses), 3))
-        for i, course in enumerate(courses):
-            col = cols[i % len(cols)]
-            with col:
-                name = course.get("name", "Unknown")
-                status = course.get("status", "unknown")
-                st.markdown(
-                    f"**{name}**  {status_badge(status)}",
-                    unsafe_allow_html=True,
-                )
-    else:
-        st.info("No courses yet. Create one from the sidebar to get started.")
+    # Home page
+    from sensei.ui.pages import home
+    home.render()
