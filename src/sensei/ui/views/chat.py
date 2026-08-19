@@ -33,7 +33,6 @@ def _init_messages(session: Session, mode: str):
         return
 
     if mode == "resume_course" and session.history:
-        # Restore history into display
         for msg in session.history:
             role = msg.get("role", "user")
             content = msg.get("content", "")
@@ -41,6 +40,17 @@ def _init_messages(session: Session, mode: str):
                 st.session_state.messages.append({"role": "user", "content": content})
             elif role == "assistant":
                 st.session_state.messages.append({"role": "assistant", "content": content})
+
+
+def _render_sidebar(session: Session):
+    """Render the progress sidebar with current state."""
+    with st.sidebar:
+        st.subheader("Progress")
+        state = session.get_state()
+        progress_display(state)
+
+        with st.expander("Course State"):
+            st.json(state)
 
 
 def render(course_name: str, mode: Optional[str] = None):
@@ -72,15 +82,7 @@ def render(course_name: str, mode: Optional[str] = None):
             st.rerun()
 
     # --- Progress in sidebar ---
-    with st.sidebar:
-        state = session.get_state()
-        st.subheader("Progress")
-        progress_display(state)
-        st.divider()
-
-        # State details
-        with st.expander("Course State"):
-            st.json(state)
+    _render_sidebar(session)
 
     # --- Display chat history ---
     for msg in st.session_state.messages:
@@ -105,22 +107,20 @@ def render(course_name: str, mode: Optional[str] = None):
             response = _stream_response(session, prompt)
             st.session_state.messages.append({"role": "assistant", "content": response})
 
+        # Reload sidebar with updated state
         st.rerun()
 
 
 def _auto_start(session: Session, mode: str):
     """
-    Send the initial empty/ approve message to kick off the conversation.
+    Send the initial empty message to kick off the conversation.
     Only runs once per session.
     """
     if st.session_state.get("_auto_started"):
         return
     st.session_state["_auto_started"] = True
 
-    if mode == "new_course":
-        initial_msg = ""
-    else:
-        initial_msg = ""
+    initial_msg = ""
 
     with st.chat_message("assistant", avatar="🎓"):
         response = _stream_response(session, initial_msg)
@@ -131,7 +131,10 @@ def _auto_start(session: Session, mode: str):
 
 def _stream_response(session: Session, user_message: str) -> str:
     """
-    Stream the agent's response using st.write_stream.
+    Stream the agent's response with real-time token-by-token display.
+
+    Uses st.empty() to create a placeholder that gets updated incrementally,
+    providing true streaming feel to the user.
 
     Args:
         session: The Session object
@@ -140,7 +143,8 @@ def _stream_response(session: Session, user_message: str) -> str:
     Returns:
         The complete response text
     """
-    # Use st.status for tool call feedback
+    # Create a placeholder for the streaming text
+    placeholder = st.empty()
     status = st.status("Thinking...", expanded=False)
 
     full_response = ""
@@ -149,17 +153,17 @@ def _stream_response(session: Session, user_message: str) -> str:
         # Stream via Session.send_stream
         for chunk in session.send_stream(user_message):
             full_response += chunk
-            status.update(label=f"Streaming response... ({len(full_response)} chars)")
+            # Update the placeholder with accumulated text
+            placeholder.markdown(full_response + "▌")
+            status.update(label=f"Streaming... ({len(full_response)} chars)")
 
+        # Final update without cursor
+        placeholder.markdown(full_response)
         status.update(label="Response complete", expanded=False)
 
     except Exception as e:
         status.update(label="Error occurred", expanded=False)
         full_response = f"Error: {str(e)}"
-        st.error(full_response)
-
-    # Display the full response via markdown
-    if full_response:
-        st.markdown(full_response)
+        placeholder.error(full_response)
 
     return full_response

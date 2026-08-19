@@ -16,7 +16,7 @@ if _src not in sys.path:
 
 from sensei.gateway.config import config_exists
 from sensei.skills.courses import list_courses, create_workspace, delete_course
-from sensei.ui.components import course_card, status_badge, progress_display
+from sensei.ui.components import progress_display
 
 
 # ---------------------------------------------------------------------------
@@ -57,12 +57,6 @@ if "messages" not in st.session_state:
 with st.sidebar:
     st.title("🎓 Sensei")
 
-    if st.button("🏠 Home", use_container_width=True):
-        st.session_state.selected_course = None
-        st.session_state.mode = None
-        st.session_state.messages = []
-        st.rerun()
-
     st.divider()
 
     # Course list
@@ -72,12 +66,9 @@ with st.sidebar:
         for course in courses:
             name = course.get("name", "Unknown")
             status = course.get("status", "unknown")
-            badge = status_badge(status)
-            last = course.get("last_accessed", "")
-            last_short = last[:10] if last else ""
 
             if st.button(
-                f"{name}  {badge}",
+                f"{name}  [{status}]",
                 key=f"sb_{name}",
                 use_container_width=True
             ):
@@ -90,32 +81,34 @@ with st.sidebar:
 
     st.divider()
 
-    # New course button
-    new_name = st.text_input("New course name", key="new_course_name")
-    if st.button("➕ Create Course", use_container_width=True, type="primary"):
-        if new_name.strip():
-            try:
-                create_workspace(new_name.strip())
-                st.session_state.selected_course = new_name.strip()
-                st.session_state.mode = "new_course"
-                st.session_state.messages = []
-                st.rerun()
-            except ValueError as e:
-                st.error(str(e))
-        else:
-            st.warning("Enter a course name.")
+    # New course form
+    with st.form("new_course_form", clear_on_submit=True):
+        new_name = st.text_input("New course name", key="new_course_name")
+        submitted = st.form_submit_button("➕ Create Course", use_container_width=True, type="primary")
+        if submitted:
+            if new_name.strip():
+                try:
+                    create_workspace(new_name.strip())
+                    st.session_state.selected_course = new_name.strip()
+                    st.session_state.mode = "new_course"
+                    st.session_state.messages = []
+                    st.rerun()
+                except ValueError as e:
+                    st.error(str(e))
+            else:
+                st.warning("Enter a course name.")
 
 # ---------------------------------------------------------------------------
 # Main area
 # ---------------------------------------------------------------------------
 if st.session_state.selected_course:
     # Import and run the chat page
-    from sensei.ui.pages import chat
+    from sensei.ui.views import chat
     chat.render(
         course_name=st.session_state.selected_course,
         mode=st.session_state.mode,
     )
 else:
     # Home page
-    from sensei.ui.pages import home
+    from sensei.ui.views import home
     home.render()
