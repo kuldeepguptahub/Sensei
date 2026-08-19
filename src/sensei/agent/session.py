@@ -10,7 +10,7 @@ from datetime import datetime
 
 from .runner import run, run_stream
 from .context import compress_history, build_resumption_context
-from ..state.manager import load_course_state, save_course_state, update_context
+from ..state.manager import load_course_state, save_course_state, update_context, COURSES_DIR
 from ..logger import SessionLogger
 
 
@@ -98,8 +98,7 @@ class Session:
         }
 
         # Track if agent called update_state during this turn
-        original_module = self.state.get("current_module", 0)
-        original_lesson = self.state.get("current_lesson", 0)
+        state_before = self.state.copy()
 
         # Run the agent with history and context
         self.logger.log_user(user_message)
@@ -115,10 +114,13 @@ class Session:
             self.logger.log_error(str(e), f"During send for course '{self.course_name}'")
             raise
 
-        # Check if agent called update_state (state would have changed)
+        # Reload state from disk — agent may have called update_state which writes directly to file
+        self._reload_state()
+
+        # Check if agent called update_state (state on disk changed)
         state_was_updated = (
-            self.state.get("current_module", 0) != original_module
-            or self.state.get("current_lesson", 0) != original_lesson
+            self.state.get("current_module", 0) != state_before.get("current_module", 0)
+            or self.state.get("current_lesson", 0) != state_before.get("current_lesson", 0)
         )
 
         self.logger.log_agent(response)
@@ -175,9 +177,7 @@ class Session:
         self.logger.log_user(user_message)
 
         # Track if agent called update_state during this turn
-        state_was_updated = False
-        original_module = self.state.get("current_module", 0)
-        original_lesson = self.state.get("current_lesson", 0)
+        state_before = self.state.copy()
 
         # Accumulate the full response for history
         full_response = ""
@@ -195,10 +195,13 @@ class Session:
             self.logger.log_error(str(e), f"During send_stream for course '{self.course_name}'")
             raise
 
-        # Check if agent called update_state (state would have changed)
+        # Reload state from disk — agent may have called update_state which writes directly to file
+        self._reload_state()
+
+        # Check if agent called update_state (state on disk changed)
         state_was_updated = (
-            self.state.get("current_module", 0) != original_module
-            or self.state.get("current_lesson", 0) != original_lesson
+            self.state.get("current_module", 0) != state_before.get("current_module", 0)
+            or self.state.get("current_lesson", 0) != state_before.get("current_lesson", 0)
         )
 
         self.logger.log_agent(full_response)
@@ -241,6 +244,14 @@ class Session:
     def _save_state(self) -> None:
         """Persist state to disk."""
         save_course_state(self.course_name, self.state)
+
+    def _reload_state(self) -> None:
+        """Reload state from disk. Used after agent runs to pick up updates from update_state tool."""
+        state_path = COURSES_DIR / self.course_name / "artifacts" / "state.json"
+        if state_path.exists():
+            import json
+            with open(state_path, 'r', encoding='utf-8') as f:
+                self.state = json.load(f)
 
     def _looks_like_teaching(self, text: str) -> bool:
         """

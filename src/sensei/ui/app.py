@@ -65,10 +65,11 @@ with st.sidebar:
         st.subheader("Courses")
         for course in courses:
             name = course.get("name", "Unknown")
-            status = course.get("status", "unknown")
+            progress = course.get("progress", 0.0)
+            progress_pct = int(progress * 100)
 
             if st.button(
-                f"{name}  [{status}]",
+                f"{name}  [{progress_pct}%]",
                 key=f"sb_{name}",
                 use_container_width=True
             ):

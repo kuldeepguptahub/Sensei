@@ -88,17 +88,30 @@ def list_courses() -> List[Dict[str, Any]]:
     List all available courses.
 
     Returns:
-        List of course information dictionaries
+        List of course information dictionaries with name, status, progress
     """
+    import json
     courses = []
     if COURSES_DIR.exists():
         for course_dir in COURSES_DIR.iterdir():
             if course_dir.is_dir():
-                courses.append({
+                info = {
                     "name": course_dir.name,
                     "path": str(course_dir),
-                    "created": course_dir.stat().st_ctime
-                })
+                    "created": course_dir.stat().st_ctime,
+                    "status": "unknown",
+                    "progress": 0.0,
+                }
+                state_path = course_dir / "artifacts" / "state.json"
+                if state_path.exists():
+                    try:
+                        with open(state_path, 'r', encoding='utf-8') as f:
+                            state = json.load(f)
+                        info["status"] = state.get("status", "unknown")
+                        info["progress"] = state.get("progress", 0.0)
+                    except Exception:
+                        pass
+                courses.append(info)
     return courses
 
 
