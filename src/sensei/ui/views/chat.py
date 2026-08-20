@@ -19,6 +19,28 @@ from sensei.agent.session import Session
 from sensei.ui.components import progress_display
 
 
+def _inject_chat_css():
+    """Inject custom CSS for chat message styling."""
+    st.markdown(
+        """
+        <style>
+        /* User message — warm orange background */
+        .user-msg {
+            background-color: #fff3e0;
+            border-left: 4px solid #e65100;
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 8px;
+        }
+        .user-msg p, .user-msg li {
+            color: #1a1a1a;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def _get_session(course_name: str, mode: str) -> Session:
     """Get or create a Session in st.session_state for the given course."""
     key = f"session_{course_name}"
@@ -64,6 +86,7 @@ def render(course_name: str, mode: Optional[str] = None):
     mode = mode or "resume_course"
     session = _get_session(course_name, mode)
     _init_messages(session, mode)
+    _inject_chat_css()
 
     # --- Header ---
     col1, col2 = st.columns([4, 1])
@@ -89,7 +112,13 @@ def render(course_name: str, mode: Optional[str] = None):
         role = msg["role"]
         icon = "🎓" if role == "assistant" else "👤"
         with st.chat_message(role, avatar=icon):
-            st.markdown(msg["content"])
+            if role == "user":
+                st.markdown(
+                    f'<div class="user-msg">{msg["content"]}</div>',
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.markdown(msg["content"])
 
     # --- Auto-start for new sessions ---
     if not st.session_state.messages:
@@ -100,7 +129,10 @@ def render(course_name: str, mode: Optional[str] = None):
         # Display user message
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user", avatar="👤"):
-            st.markdown(prompt)
+            st.markdown(
+                f'<div class="user-msg">{prompt}</div>',
+                unsafe_allow_html=True,
+            )
 
         # Get agent response with streaming
         with st.chat_message("assistant", avatar="🎓"):
