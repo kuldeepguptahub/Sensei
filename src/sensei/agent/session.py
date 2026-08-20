@@ -10,7 +10,8 @@ from datetime import datetime
 
 from .runner import run, run_stream
 from .context import compress_history, build_resumption_context
-from ..state.manager import load_course_state, save_course_state, update_context, COURSES_DIR
+from ..state.manager import load_course_state, save_course_state, update_context
+from ..path_utils import COURSES_DIR
 from ..logger import SessionLogger
 
 
@@ -225,7 +226,17 @@ class Session:
         if state_path.exists():
             import json
             with open(state_path, 'r', encoding='utf-8') as f:
-                self.state = json.load(f)
+                disk_state = json.load(f)
+            # Log what we're reloading for debugging
+            old_lesson = self.state.get("current_lesson", "?")
+            new_lesson = disk_state.get("current_lesson", "?")
+            if old_lesson != new_lesson:
+                self.logger.log_event(
+                    "state_reload",
+                    f"current_lesson: {old_lesson} -> {new_lesson}, "
+                    f"status: {disk_state.get('status', '?')}"
+                )
+            self.state = disk_state
 
     def clear_history(self) -> None:
         """Clear conversation history for state transitions (e.g., planning → active)."""
