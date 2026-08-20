@@ -6,12 +6,13 @@ Note: This is a legacy module that will be replaced by skills.
 """
 
 import json
+import os
 import shutil
 from pathlib import Path
 from typing import Dict, Any
 
-# Base directory for courses
-COURSES_DIR = Path("courses")
+# Use the resolved COURSES_DIR from path_utils to avoid path inconsistencies
+from ..path_utils import COURSES_DIR
 
 
 def create_course_state(course_name: str) -> None:
@@ -151,8 +152,10 @@ def save_course_state(course_name: str, state: Dict[str, Any]) -> None:
         raise FileNotFoundError(f"Course '{course_name}' does not exist")
 
     state_path = artifacts_dir / "state.json"
-    with open(state_path, 'w') as f:
+    with open(state_path, 'w', encoding='utf-8') as f:
         json.dump(state, f, indent=2)
+        f.flush()
+        os.fsync(f.fileno())
 
 
 def update_context(course_name: str, content: str) -> None:
