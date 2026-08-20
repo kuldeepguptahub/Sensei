@@ -1,6 +1,6 @@
 # Sensei
 
-> Transform documentation into an interactive, project-based learning experience powered by your favorite LLM.
+> An AI-powered learning engine that builds personalized paths to mastery for any subject.
 
 ## Installation
 
