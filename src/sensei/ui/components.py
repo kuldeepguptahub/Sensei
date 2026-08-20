@@ -41,13 +41,14 @@ def progress_display(state: Dict[str, Any]):
     progress = state.get("progress", 0.0)
     status = state.get("status", "unknown")
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
     with col1:
         st.metric("Module", module)
     with col2:
         st.metric("Lesson", lesson)
-    with col3:
-        st.metric("Status", status)
+
+    badge_html = status_badge(status)
+    st.markdown(badge_html, unsafe_allow_html=True)
 
     st.progress(progress, text=f"Progress: {progress:.0%}")
 
