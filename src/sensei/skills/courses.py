@@ -5,6 +5,7 @@ These skills manage workspace lifecycle.
 """
 
 import json
+import os
 import shutil
 from typing import Dict, Any, List
 
@@ -176,5 +177,7 @@ def update_state(course_name: str, state_json: str) -> None:
     state = validate_state_json(state_json)
 
     state_path = course_dir / "artifacts" / "state.json"
-    with open(state_path, 'w') as f:
+    with open(state_path, 'w', encoding='utf-8') as f:
         json.dump(state, f, indent=2)
+        f.flush()
+        os.fsync(f.fileno())
