@@ -300,9 +300,9 @@ def start_new_course(verbose: bool = typer.Option(False, "--verbose", "-v", help
             typer.echo("COURSE APPROVED - LET'S BEGIN!".center(60))
             typer.echo("=" * 60)
 
-            # Start the course — mode block in system prompt handles the workflow
+            # Notify the agent that the course is approved
             try:
-                _display_stream(session.send_stream("approve"))
+                _display_stream(session.send_stream("The course plan has been approved. Begin teaching."))
             except Exception as e:
                 typer.echo(f"\nError: {e}")
                 if verbose:
