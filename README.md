@@ -162,7 +162,7 @@ It guides you from understanding concepts to building real projects, reviewing y
 
 Whether you use OpenAI, Anthropic, Google, Ollama, or another compatible model, Sensei's goal remains the same:
 
-> Help you master technologies, not just finish reading their documentation.
+> Help you master any technology, any subject, not just finish reading their documentation.
 
 ## What Makes Sensei Different?
 
