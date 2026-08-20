@@ -127,7 +127,8 @@ def _error_hint(tool_name: str, args: Dict[str, Any], error: str) -> str:
                 "progress (float 0-1), status (string), last_accessed (ISO timestamp), "
                 "last_updated (ISO timestamp). "
                 "Example: {\"current_module\":0,\"current_lesson\":0,\"progress\":0.0,\"status\":\"active\","
-                "\"last_accessed\":\"2026-01-01T00:00:00\",\"last_updated\":\"2026-01-01T00:00:00\"}"
+                "\"last_accessed\":\"2026-01-01T00:00:00\",\"last_updated\":\"2026-01-01T00:00:00\","
+                "\"last_checkpoint\":\"\",\"competency_index\":{}}"
             )
     return ""
 
@@ -137,8 +138,8 @@ def _next_step_hint(tool_name: str, args: Dict[str, Any], mode: str = "new_cours
     """
     Return a hint about what to do next after a successful tool call.
 
-    These hints are critical for keeping the agent on track. They tell the model
-    exactly what to do next so it doesn't get stuck re-reading or re-writing artifacts.
+    These hints guide the agent toward the next logical action.
+    They should be adaptive and use teacher judgment, not rigid rules.
 
     Args:
         tool_name: Name of the tool that was called
@@ -155,55 +156,20 @@ def _next_step_hint(tool_name: str, args: Dict[str, Any], mode: str = "new_cours
     curr_progress = context.get("progress", 0.0) if context else 0.0
 
     if tool_name == "write_artifact":
-        if artifact == "definition.json":
-            return (
-                "Definition saved. Now READ planner.md — it should already exist from the interview. "
-                "Present the roadmap to the learner for approval. "
-                "Do NOT overwrite planner.md unless it is empty or missing."
-            )
-        elif artifact == "planner.md":
-            return (
-                "Planner saved. NOW present the roadmap to the learner for approval. "
-                "Do NOT write any more artifacts. Just show the roadmap and ask for approval."
-            )
-        elif artifact == "context.md":
-            return (
-                "Context saved. NOW teach the current lesson. "
-                "Do NOT read or write any more artifacts. Just teach the lesson content."
-            )
-        elif artifact == "notes.md":
-            return "Notes saved. Continue with the lesson."
-        else:
-            return f"Saved {artifact}. Continue with the next step."
+        # After writing an artifact, continue with the workflow
+        return f"Saved {artifact}. Continue with the next step of your plan."
 
     elif tool_name == "read_artifact":
-        if artifact == "definition.json":
-            return "You have the learner profile. Continue with your task."
-        elif artifact == "planner.md":
-            return "You have the roadmap. Continue with your task."
-        elif artifact == "state.json":
+        if artifact == "state.json":
             if mode == "resume_course":
                 return (
-                    f"Current progress: module {curr_module}, lesson {curr_lesson}, progress {curr_progress:.0%}. "
-                    f"Now READ planner.md, definition.json, and context.md to understand what was covered. "
-                    f"Then resume teaching from Module {curr_module}, Lesson {curr_lesson + 1}. "
-                    f"After teaching, call update_state to advance to lesson {curr_lesson + 2}."
+                    f"Current progress: module {curr_module}, lesson {curr_lesson}, "
+                    f"progress {curr_progress:.0%}. "
+                    f"Resume teaching from where the learner left off."
                 )
             return (
-                f"Current progress: module {curr_module}, lesson {curr_lesson}, progress {curr_progress:.0%}. "
-                f"Continue from where the learner left off. "
-                f"After teaching, call update_state to advance to lesson {curr_lesson + 1}."
-            )
-        elif artifact == "context.md":
-            next_lesson = curr_lesson + 1
-            next_progress = min(1.0, curr_progress + 0.1)
-            return (
-                f"You have the session context. NOW teach Module {curr_module}, Lesson {curr_lesson + 1}. "
-                f"Do NOT read or write any more artifacts. Just teach the lesson content. "
-                f"After teaching, when the learner wants to continue, call update_state with: "
-                f"current_module={curr_module}, current_lesson={next_lesson}, "
-                f"progress={next_progress:.2f}, status='active'. "
-                f"NEVER reset current_lesson to 0."
+                f"Current progress: module {curr_module}, lesson {curr_lesson}, "
+                f"progress {curr_progress:.0%}. Continue with your task."
             )
         else:
             return f"You have {artifact}. Continue with your task."
@@ -228,7 +194,8 @@ def _next_step_hint(tool_name: str, args: Dict[str, Any], mode: str = "new_cours
                 f"Increment it to {curr_lesson + 1}. "
                 f"NEVER reset current_lesson to 0 unless advancing to a new module. "
                 f"Required: current_module={curr_module}, current_lesson={curr_lesson + 1}, "
-                f"progress={min(1.0, curr_progress + 0.1):.2f}"
+                f"progress={min(1.0, curr_progress + 0.1):.2f}, status='active', "
+                f"last_accessed=<ISO timestamp>, last_updated=<ISO timestamp>"
             )
 
         # Validate: lesson should match expected next lesson
@@ -236,38 +203,34 @@ def _next_step_hint(tool_name: str, args: Dict[str, Any], mode: str = "new_cours
             return (
                 f"WARNING: You set current_lesson to {new_lesson} but expected {curr_lesson + 1}. "
                 f"Current state: module {curr_module}, lesson {curr_lesson}. "
-                f"Set current_lesson to {curr_lesson + 1} to advance correctly."
+                f"Set current_lesson to {curr_lesson + 1} to advance correctly. "
+                f"Include last_accessed and last_updated as ISO timestamps."
             )
 
         if new_status == "active" and curr_lesson == 0:
             return (
-                "Status is now ACTIVE. You MUST teach Module 1, Lesson 1 NOW. "
-                "Read planner.md to know what the lesson is, then deliver the full lesson content "
-                "(concept explanation, how it works, code examples, key takeaways). "
-                "Do NOT ask questions. Just teach. "
-                "After teaching, wait for the learner's response."
+                "Status is now ACTIVE. Begin teaching Module 1, Lesson 1. "
+                "Read the course plan to know what to teach, then deliver the lesson content. "
+                "After teaching, when the learner is ready to continue, "
+                "call update_state to advance to the next lesson."
             )
         elif new_status == "completed":
             return "Course is complete! Congratulate the learner."
         elif new_status == "active":
             return (
                 f"State updated: module {new_module}, lesson {new_lesson}, progress {new_progress:.0%}. "
-                f"Good. Now teach the next lesson or wait for the learner's question. "
-                f"Remember: after teaching, call update_state to advance to lesson {new_lesson + 1}."
+                f"Continue teaching. After the learner demonstrates understanding, "
+                f"call update_state to advance to lesson {new_lesson + 1}."
             )
 
         return (
             "State updated. Required fields: current_module (int), current_lesson (int), "
             "progress (float 0-1), status (string), last_accessed (ISO), last_updated (ISO). "
-            "IMPORTANT: current_lesson must be incremented by 1, never reset to 0."
+            "IMPORTANT: current_lesson must be incremented by 1, never reset to 0. "
+            "ALWAYS include last_accessed and last_updated as current ISO timestamps."
         )
 
     elif tool_name == "create_workspace":
-        if mode == "new_course":
-            return (
-                "The workspace was created, but you should NOT have called this — "
-                "the CLI already created it. Continue with the interview."
-            )
         return "Workspace created. Continue with your task."
 
     elif tool_name == "list_courses":
@@ -301,42 +264,33 @@ def _get_mode_block(mode: str, context: Optional[Dict[str, Any]] = None) -> str:
 [MODE: new_course]
 You are creating a new course called '{course_name}'.
 
-WORKFLOW — follow these phases strictly in order:
+WORKFLOW:
 
-Phase 1 — Interview (you MUST complete this phase before ANY tool calls):
-Ask these EXACT 4 questions, one at a time, in this order:
-1. "What would you like to learn about?"
-2. "What's your experience level? (beginner / some experience / experienced)"
-3. "What would you like to build or do after this course?"
-4. "How much time can you spend per day or week?"
+1. Interview the learner to understand their goals, knowledge, and context.
+   - Ask adaptive questions based on the subject (see instructions §6)
+   - Do NOT use a fixed questionnaire — let the subject guide your inquiry
+   - Determine their knowledge through conversation and evidence, not self-assessment
+   - Ask only questions whose answers will materially improve the curriculum
 
-Rules for Phase 1:
-- Ask ONE question at a time, wait for the answer
-- Do NOT call ANY tool during this phase — no write_artifact, no read_artifact, no list_artifacts
-- Do NOT write definition.json, planner.md, or any other file
-- Do NOT save partial answers to any file
-- You must ask ALL 4 questions and receive ALL 4 answers before Phase 2
+2. Once you have sufficient understanding, design the curriculum:
+   - Analyze the subject and determine the mastery model
+   - Build from foundations toward advanced concepts
+   - Organize by logical dependencies, not arbitrary ordering
+   - Write definition.json with the learner profile
+   - Write planner.md with the full learning roadmap
 
-Phase 2 — Planning (ONLY after you have ALL 4 answers):
-Now call write_artifact TWICE:
-1. First: write definition.json with ALL fields filled from the 4 answers
-2. Then: write planner.md with the FULL learning roadmap
+3. Present the course plan to the learner for approval.
+   - Show the roadmap and ask if it looks good
+   - Be prepared to adjust based on feedback
 
-Rules for Phase 2:
-- Write definition.json ONCE with complete data
-- Write planner.md ONCE with the full roadmap
-- Do NOT re-write either file after writing it
+4. Once approved, update state to active and begin teaching.
 
-Phase 3 — Approval:
-- Read planner.md and show its content to the learner
-- Ask "Does this roadmap look good to you?"
-- Do NOT write any more artifacts
-
-CRITICAL VIOLATIONS TO AVOID:
-- Writing ANY file during Phase 1 = VIOLATION
-- Writing definition.json with empty fields = VIOLATION
-- Writing definition.json more than once = VIOLATION
-- Skipping any of the 4 interview questions = VIOLATION
+IMPORTANT:
+- Use your judgment throughout — do not follow a rigid script
+- The interview should feel like an intelligent conversation
+- Adapt your questioning to the domain (programming, history, math, etc.)
+- Write artifacts when you have enough information, not before
+- Do not ask the learner to define their own level — determine it through evidence
 """
     elif mode == "resume_course":
         return f"""
@@ -344,18 +298,18 @@ CRITICAL VIOLATIONS TO AVOID:
 You are resuming an existing course called '{course_name}' (status: {status}).
 
 WORKFLOW:
-1. Read state.json to find current_module and current_lesson
-2. Read planner.md to see the full roadmap
-3. Read definition.json to see the learner profile
-4. Read context.md to see what was covered in previous sessions
-5. Resume teaching from the current module and lesson
+1. Read the course state to find current position (module, lesson, progress)
+2. Read the course plan to see the full roadmap
+3. Read the learner profile to understand their background
+4. Read any session context from previous sessions
+5. Resume teaching from where the learner left off
 
-CRITICAL RULES:
-- The workspace ALREADY exists — do NOT call create_workspace
-- Do NOT ask interview questions — the learner has already been interviewed
-- Do NOT create definition.json or planner.md — they already exist
-- Do NOT create any new files — just read existing artifacts and teach
-- Start teaching immediately after reading artifacts
+IMPORTANT:
+- The workspace already exists — do not create it again
+- The learner has already been interviewed — do not repeat the interview
+- Do not restart from the beginning unless there is a clear reason
+- Start teaching immediately after reading the necessary context
+- Use your judgment about what to review vs. what to skip
 """
     return ""
 
@@ -411,10 +365,6 @@ def run(prompt: str, context: Optional[Dict[str, Any]] = None, verbose: bool = F
 
     # Tool calling loop
     tool_call_history = []  # Track recent tool calls for loop detection
-    interview_answer_count = 0  # Track interview answers for new_course guard
-    definition_written = False  # Track if definition.json has been written
-    # Only enable interview guard if mode is new_course AND prompt is empty (start of interview)
-    interview_guard = (mode == "new_course" and not prompt.strip())
 
     for iteration in range(MAX_TOOL_CALLS):
         # Build full prompt from conversation history
@@ -446,39 +396,10 @@ def run(prompt: str, context: Optional[Dict[str, Any]] = None, verbose: bool = F
             if not calls:
                 return "I'm not sure how to respond to that. Could you rephrase?"
 
-            # Track whether definition.json has been written (for interview guard)
-            if not hasattr(run, '_interview_answers'):
-                run._interview_answers = {}
-            course_key = context.get("course_name", "") if context else ""
-
             # Execute each tool call
             for call in calls:
                 tool_name = call["name"]
                 tool_args = call["args"]
-
-                # Interview guard: block write_artifact during Phase 1 of new_course
-                if (interview_guard
-                        and tool_name == "write_artifact"
-                        and not definition_written
-                        and interview_answer_count < 4):
-                    # Count this as an interview answer collected
-                    interview_answer_count += 1
-                    conversation.append({
-                        "role": "user",
-                        "content": (
-                            f"BLOCKED: You cannot write any files during the interview. "
-                            f"You have collected {interview_answer_count}/4 answers. "
-                            f"Ask the next interview question. "
-                            f"Do NOT call write_artifact until you have all 4 answers."
-                        )
-                    })
-                    break
-
-                # Mark definition.json as written (interview complete)
-                if (mode == "new_course"
-                        and tool_name == "write_artifact"
-                        and tool_args.get("artifact_name") == "definition.json"):
-                    definition_written = True
 
                 # Loop detection: if same tool+artifact called 3+ times in last 5 calls, break out
                 # Use tool:artifact key so read_artifact(file_a) and read_artifact(file_b) don't collide
@@ -568,9 +489,6 @@ def run_stream(prompt: str, context: Optional[Dict[str, Any]] = None, verbose: b
         conversation.append({"role": "user", "content": f"Context: {context}"})
 
     tool_call_history = []
-    interview_answer_count = 0
-    definition_written = False
-    interview_guard = (mode == "new_course" and not prompt.strip())
 
     for iteration in range(MAX_TOOL_CALLS):
         full_prompt = "\n\n".join([msg["content"] for msg in conversation])
@@ -595,25 +513,6 @@ def run_stream(prompt: str, context: Optional[Dict[str, Any]] = None, verbose: b
             for call in tool_calls:
                 tool_name = call["name"]
                 tool_args = call["args"]
-
-                # Interview guard
-                if (interview_guard
-                        and tool_name == "write_artifact"
-                        and not definition_written
-                        and interview_answer_count < 4):
-                    interview_answer_count += 1
-                    blocked_msg = (
-                        f"BLOCKED: You cannot write any files during the interview. "
-                        f"You have collected {interview_answer_count}/4 answers. "
-                        f"Ask the next interview question."
-                    )
-                    conversation.append({"role": "user", "content": blocked_msg})
-                    break
-
-                if (mode == "new_course"
-                        and tool_name == "write_artifact"
-                        and tool_args.get("artifact_name") == "definition.json"):
-                    definition_written = True
 
                 # Loop detection — track tool:artifact, not just tool
                 artifact_key = tool_args.get("artifact_name", "")
